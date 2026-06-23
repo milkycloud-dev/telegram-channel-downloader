@@ -1,0 +1,55 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Distribution / packaging
+bin/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual environments
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+
+# Logs and databases
+*.log
+error.log
+*.sqlite3
+*.db
+history_*.txt
+
+# IDE / Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Configuration and secrets
+config.json
+*.session
+*.session-journal
+.env
+.venv
+
+# Specific ignores for telegram-channel-downloader
+# DO NOT COMMIT AUTH TOKENS OR SESSION FILES

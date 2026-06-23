@@ -1,0 +1,4 @@
+Telethon
+flet==0.22.1
+qrcode
+pillow
