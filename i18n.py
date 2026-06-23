@@ -70,7 +70,7 @@ TRANSLATIONS = {
         "Ссылка": "Link",
         "Размер": "Size",
         "Время": "Time",
-        "Скопировано в буфер обмена: ": "Copied to clipboard: "
+        "Скопировано в буфер обмена: ": "Copied to clipboard: ",
         "Сохранено": "Saved",
         "Авторизован": "Authorized",
         "сообщений": "messages",
