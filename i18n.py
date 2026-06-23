@@ -71,6 +71,19 @@ TRANSLATIONS = {
         "Размер": "Size",
         "Время": "Time",
         "Скопировано в буфер обмена: ": "Copied to clipboard: "
+        "Сохранено": "Saved",
+        "Авторизован": "Authorized",
+        "сообщений": "messages",
+        "Общий прогресс:": "Overall progress:",
+        "⏳ Осталось": "⏳ ETA",
+        "🚀 Скорость": "🚀 Speed",
+        "⏱ Время работы": "⏱ Elapsed",
+        "🎬 Видео": "🎬 Videos",
+        "📷 Фото": "📷 Photos",
+        "Общий размер": "Total size",
+        "Всего файлов": "Total files",
+        "Обработано": "Processed",
+        "Всего сообщений": "Total messages",
     }
 }
 

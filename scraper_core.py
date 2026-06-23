@@ -873,10 +873,11 @@ class ScraperCore:
         max_retries = self.config.get("max_retries", 30)
         
         mtype = classify_media(message) or "файл"
-        target_name = "комментария" if is_comment else "поста"
+        target_name_gen = "комментария" if is_comment else "поста"
+        target_name_nom = "комментарий" if is_comment else "пост"
         
         # Подробный лог старта скачивания
-        self._emit("on_log", {"msg": f"⬇️ Начато скачивание {target_name} #{prefix} ({mtype})..."})
+        self._emit("on_log", {"msg": f"⬇️ Начато скачивание {target_name_gen} #{prefix} ({mtype})..."})
         
         def progress_cb(received, total):
             if self._stop.is_set():
@@ -919,7 +920,7 @@ class ScraperCore:
                 mtype = classify_media(message) or "unknown"
                 
                 # Подробный лог успешного скачивания
-                self._emit("on_log", {"msg": f"✅ Успешно скачан {target_name} #{prefix} ({mtype}, {format_size(fsize)})"})
+                self._emit("on_log", {"msg": f"✅ Успешно скачан {target_name_nom} #{prefix} ({mtype}, {format_size(fsize)})"})
 
                 # Обновляем статистику / Update statistics
                 self.stats.total_files += 1

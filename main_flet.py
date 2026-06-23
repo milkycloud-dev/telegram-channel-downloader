@@ -41,12 +41,12 @@ class TelegramScraperFlet:
             if await self.scraper.is_authorized():
                 me = await self.scraper.client.get_me()
                 phone = f" (+{me.phone})" if getattr(me, 'phone', None) else ""
-                self.lbl_auth_status.value = f"✅ Авторизован{phone} (Сохранено)"
+                self.lbl_auth_status.value = f"✅ {t('Авторизован')} {phone} ({t('Сохранено')})"
                 self.lbl_auth_status.color = ft.colors.GREEN_400
                 self.img_qr.visible = False
                 self.write_auth_log("Авторизация загружена из кэша.")
             else:
-                self.lbl_auth_status.value = "Ожидание авторизации"
+                self.lbl_auth_status.value = t("Ожидание авторизации")
                 self.lbl_auth_status.color = ft.colors.GREY_400
             self.page.update()
         except Exception as e:
@@ -66,15 +66,17 @@ class TelegramScraperFlet:
         s.request_input = self.cb_request_input
 
     def build_ui(self):
-        def change_lang(e, lang):
+        async def change_lang(e, lang):
             from i18n import set_lang
             set_lang(lang)
             self.page.controls.clear()
             self.build_ui()
+            self.load_settings()
+            await self._update_auth_status()
             self.page.update()
 
-        btn_ru = ft.TextButton("🇷🇺", on_click=lambda e: change_lang(e, "ru"))
-        btn_en = ft.TextButton("🇬🇧", on_click=lambda e: change_lang(e, "en"))
+        btn_ru = ft.TextButton("🇷🇺", on_click=lambda e: self.page.run_task(change_lang, e, "ru"))
+        btn_en = ft.TextButton("🇬🇧", on_click=lambda e: self.page.run_task(change_lang, e, "en"))
 
         header = ft.Container(
             content=ft.Row([
@@ -82,7 +84,7 @@ class TelegramScraperFlet:
                     ft.Icon(ft.icons.TELEGRAM, size=30, color=ft.colors.BLUE_400),
                     ft.Text(t("Telegram Channel Downloader"), size=24, weight=ft.FontWeight.BOLD, font_family="InterBold"),
                 ], alignment=ft.MainAxisAlignment.START, expand=1),
-                ft.Row([btn_ru, btn_en], alignment=ft.MainAxisAlignment.END)
+                ft.Row([ft.Icon(ft.icons.LANGUAGE, color=ft.colors.GREY_500), btn_ru, btn_en], alignment=ft.MainAxisAlignment.END)
             ]),
             padding=15,
             bgcolor=ft.colors.SURFACE_VARIANT,
@@ -169,15 +171,15 @@ class TelegramScraperFlet:
 
         # Stats Grid
         stats_keys = [
-            ("total_msgs", "Всего сообщений"),
-            ("processed", "Обработано"),
-            ("total_files", "Всего файлов"),
-            ("total_size", "Общий размер"),
-            ("photos", "📷 Фото"),
-            ("videos", "🎬 Видео"),
-            ("elapsed", "⏱ Время работы"),
-            ("speed", "🚀 Скорость"),
-            ("eta", "⏳ Осталось"),
+            ("total_msgs", t("Всего сообщений")),
+            ("processed", t("Обработано")),
+            ("total_files", t("Всего файлов")),
+            ("total_size", t("Общий размер")),
+            ("photos", t("📷 Фото")),
+            ("videos", t("🎬 Видео")),
+            ("elapsed", t("⏱ Время работы")),
+            ("speed", t("🚀 Скорость")),
+            ("eta", t("⏳ Осталось")),
         ]
         
         grid_items = []
@@ -398,7 +400,7 @@ class TelegramScraperFlet:
 
     def cb_progress_overall(self, frac, done, total):
         self.pb_main.value = frac
-        self.lbl_progress.value = f"Общий прогресс: {done} / {total} сообщений"
+        self.lbl_progress.value = f"{t('Общий прогресс:')} {done} / {total} {t('сообщений')}"
         self.page.update()
 
     def cb_progress_end(self, prefix):
@@ -518,7 +520,7 @@ class TelegramScraperFlet:
             if ok:
                 me = await self.scraper.client.get_me()
                 phone = f" (+{me.phone})" if getattr(me, 'phone', None) else ""
-                self.lbl_auth_status.value = f"✅ Авторизован{phone}"
+                self.lbl_auth_status.value = f"✅ {t('Авторизован')} {phone}"
                 self.lbl_auth_status.color = ft.colors.GREEN_400
                 self.img_qr.visible = False
                 self.write_auth_log("Успешная авторизация!")
@@ -541,7 +543,7 @@ class TelegramScraperFlet:
         except Exception as ex:
             self.write_auth_log(f"Ошибка при удалении сессии: {ex}")
         
-        self.lbl_auth_status.value = "Ожидание авторизации"
+        self.lbl_auth_status.value = t("Ожидание авторизации")
         self.lbl_auth_status.color = ft.colors.GREY_400
         self.page.update()
 
