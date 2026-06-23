@@ -44,13 +44,13 @@ class TelegramScraperFlet:
                 self.lbl_auth_status.value = f"✅ {t('Авторизован')} {phone} ({t('Сохранено')})"
                 self.lbl_auth_status.color = ft.colors.GREEN_400
                 self.img_qr.visible = False
-                self.write_auth_log("Авторизация загружена из кэша.")
+                self.write_auth_log(t("Авторизация загружена из кэша."))
             else:
                 self.lbl_auth_status.value = t("Ожидание авторизации")
                 self.lbl_auth_status.color = ft.colors.GREY_400
             self.page.update()
         except Exception as e:
-            self.write_auth_log(f"Ошибка проверки авторизации: {e}")
+            self.write_auth_log(f'{t("Ошибка проверки авторизации:")} {e}')
 
     def bind_callbacks(self):
         s = self.scraper
@@ -65,26 +65,22 @@ class TelegramScraperFlet:
         s.on_stats = self.cb_stats
         s.request_input = self.cb_request_input
 
+    async def change_lang(self, e):
+        from i18n import set_lang
+        set_lang(e.control.value)
+        self.page.controls.clear()
+        self.build_ui()
+        self.load_settings()
+        await self._update_auth_status()
+        self.page.update()
+
     def build_ui(self):
-        async def change_lang(e, lang):
-            from i18n import set_lang
-            set_lang(lang)
-            self.page.controls.clear()
-            self.build_ui()
-            self.load_settings()
-            await self._update_auth_status()
-            self.page.update()
-
-        btn_ru = ft.TextButton("🇷🇺", on_click=lambda e: self.page.run_task(change_lang, e, "ru"))
-        btn_en = ft.TextButton("🇬🇧", on_click=lambda e: self.page.run_task(change_lang, e, "en"))
-
         header = ft.Container(
             content=ft.Row([
                 ft.Row([
                     ft.Icon(ft.icons.TELEGRAM, size=30, color=ft.colors.BLUE_400),
                     ft.Text(t("Telegram Channel Downloader"), size=24, weight=ft.FontWeight.BOLD, font_family="InterBold"),
                 ], alignment=ft.MainAxisAlignment.START, expand=1),
-                ft.Row([ft.Icon(ft.icons.LANGUAGE, color=ft.colors.GREY_500), btn_ru, btn_en], alignment=ft.MainAxisAlignment.END)
             ]),
             padding=15,
             bgcolor=ft.colors.SURFACE_VARIANT,
@@ -319,6 +315,7 @@ class TelegramScraperFlet:
                 ft.Text(t("Настройки Канала"), size=18, weight=ft.FontWeight.BOLD),
                 self.inp_channel_id,
                 ft.Row([self.inp_dl_dir, btn_pick_dir]),
+                ft.Divider(),
                 btn_save
             ], scroll=ft.ScrollMode.AUTO),
             padding=20
@@ -345,7 +342,7 @@ class TelegramScraperFlet:
         
         from scraper_core import save_config
         save_config(cfg)
-        self.write_log("Настройки сохранены", ft.colors.GREEN_400)
+        self.write_log(t("Настройки сохранены"), ft.colors.GREEN_400)
         self.page.snack_bar = ft.SnackBar(ft.Text(t("Настройки сохранены!")))
         self.page.snack_bar.open = True
         self.page.update()
@@ -395,7 +392,7 @@ class TelegramScraperFlet:
             
         bar_data = self.active_bars[prefix]
         bar_data["pb"].value = frac
-        bar_data["lbl"].value = f"Файл #{prefix}: {format_size(done)} / {format_size(total)}"
+        bar_data["lbl"].value = f'{t("Файл")} #{prefix}: {format_size(done)} / {format_size(total)}'
         self.page.update()
 
     def cb_progress_overall(self, frac, done, total):
@@ -416,8 +413,8 @@ class TelegramScraperFlet:
         self.lbl_global_status.color = ft.colors.RED_400
         self.page.snack_bar = ft.SnackBar(ft.Text(f"Ошибка: {text}"), bgcolor=ft.colors.RED_800)
         self.page.snack_bar.open = True
-        self.write_log(f"[ОШИБКА] {text}", ft.colors.RED_400)
-        self.write_monitor_log(f"[ОШИБКА] {text}", ft.colors.RED_400)
+        self.write_log(f'[{t("ОШИБКА")}] {text}', ft.colors.RED_400)
+        self.write_monitor_log(f'[{t("ОШИБКА")}] {text}', ft.colors.RED_400)
         
         # Save to error.log
         try:
@@ -463,12 +460,12 @@ class TelegramScraperFlet:
         b64 = base64.b64encode(buf.getvalue()).decode("utf-8")
         self.img_qr.src_base64 = b64
         self.img_qr.visible = True
-        self.write_auth_log("Отсканируйте QR код в приложении Telegram (Settings -> Devices -> Link Desktop Device)")
+        self.write_auth_log(t("Отсканируйте QR код в приложении Telegram (Settings -> Devices -> Link Desktop Device)"))
         self.page.update()
 
     def cb_complete(self, dummy=None):
-        self.write_log("Скачивание завершено", ft.colors.GREEN_400)
-        self.cb_status("Ожидание")
+        self.write_log(t("Скачивание завершено"), ft.colors.GREEN_400)
+        self.cb_status(t("Ожидание"))
 
     def cb_stats(self, stats: ScraperStats):
         sl = self.stat_labels
@@ -484,7 +481,7 @@ class TelegramScraperFlet:
         
         if stats.processed_msgs > 0 and stats.total_channel_msgs > 0 and elapsed > 0:
             file_rate = stats.total_files / (elapsed / 60)
-            sl["speed"].value = f"{file_rate:.1f} ф/мин"
+            sl["speed"].value = f'{file_rate:.1f} {t("ф/мин")}'
             
             rem = stats.total_channel_msgs - stats.processed_msgs
             eta = (rem / stats.processed_msgs) * elapsed
@@ -511,8 +508,8 @@ class TelegramScraperFlet:
 
     # Button Handlers
     async def on_auth(self, e):
-        self.lbl_auth_status.value = "Подключение..."
-        self.write_auth_log("Запрос авторизации...")
+        self.lbl_auth_status.value = t("Подключение...")
+        self.write_auth_log(t("Запрос авторизации..."))
         self.page.update()
         
         try:
@@ -523,12 +520,12 @@ class TelegramScraperFlet:
                 self.lbl_auth_status.value = f"✅ {t('Авторизован')} {phone}"
                 self.lbl_auth_status.color = ft.colors.GREEN_400
                 self.img_qr.visible = False
-                self.write_auth_log("Успешная авторизация!")
+                self.write_auth_log(t("Успешная авторизация!"))
             else:
-                self.lbl_auth_status.value = "❌ Ошибка авторизации"
+                self.lbl_auth_status.value = f'❌ {t("Ошибка авторизации")}'
                 self.lbl_auth_status.color = ft.colors.RED_400
         except Exception as err:
-            self.write_auth_log(f"Ошибка: {err}")
+            self.write_auth_log(f'{t("Ошибка:")} {err}')
         self.page.update()
 
     async def on_logout(self, e):
@@ -539,9 +536,9 @@ class TelegramScraperFlet:
                 os.remove("telegram_session.session")
             if os.path.exists("telegram_session.session-journal"):
                 os.remove("telegram_session.session-journal")
-            self.write_auth_log("Сессия удалена. Выполнен выход из аккаунта.")
+            self.write_auth_log(t("Сессия удалена. Выполнен выход из аккаунта."))
         except Exception as ex:
-            self.write_auth_log(f"Ошибка при удалении сессии: {ex}")
+            self.write_auth_log(f'{t("Ошибка при удалении сессии:")} {ex}')
         
         self.lbl_auth_status.value = t("Ожидание авторизации")
         self.lbl_auth_status.color = ft.colors.GREY_400
@@ -597,11 +594,11 @@ class TelegramScraperFlet:
                             elif os.path.isdir(file_path):
                                 import shutil
                                 shutil.rmtree(file_path)
-                        self.write_log("Скачанные файлы удалены.", ft.colors.ORANGE_400)
+                        self.write_log(t("Скачанные файлы удалены."), ft.colors.ORANGE_400)
                     except Exception as err:
-                        self.write_log(f"Ошибка удаления файлов: {err}", ft.colors.RED_400)
+                        self.write_log(f'{t("Ошибка удаления файлов:")} {err}', ft.colors.RED_400)
                         
-                self.write_log("Прогресс канала и история сброшены!", ft.colors.ORANGE_400)
+                self.write_log(t("Прогресс канала и история сброшены!"), ft.colors.ORANGE_400)
             
         dlg = ft.AlertDialog(
             title=ft.Text(t("Сброс прогресса")),

@@ -1,22 +1,30 @@
 import re
+
 with open('i18n.py', 'r', encoding='utf-8') as f:
     content = f.read()
 
 new_keys = {
-    'Всего сообщений': 'Total messages',
-    'Обработано': 'Processed',
-    'Всего файлов': 'Total files',
-    'Общий размер': 'Total size',
-    '📷 Фото': '📷 Photos',
-    '🎬 Видео': '🎬 Videos',
-    '⏱ Время работы': '⏱ Elapsed',
-    '🚀 Скорость': '🚀 Speed',
-    '⏳ Осталось': '⏳ ETA',
-    'Общий прогресс:': 'Overall progress:',
-    'сообщений': 'messages',
-    'Авторизован': 'Authorized',
-    'Сохранено': 'Saved',
-    'Ожидание авторизации': 'Waiting for authorization',
+    'Язык / Language': 'Language / Язык',
+    'Авторизация загружена из кэша.': 'Authorization loaded from cache.',
+    'Ошибка проверки авторизации:': 'Authorization check error:',
+    'Отсканируйте QR код в приложении Telegram (Settings -> Devices -> Link Desktop Device)': 'Scan the QR code in the Telegram app (Settings -> Devices -> Link Desktop Device)',
+    'Запрос авторизации...': 'Authorization request...',
+    'Успешная авторизация!': 'Successful authorization!',
+    'Ошибка:': 'Error:',
+    'Сессия удалена. Выполнен выход из аккаунта.': 'Session deleted. Logged out of account.',
+    'Ошибка при удалении сессии:': 'Error deleting session:',
+    'Подключение...': 'Connecting...',
+    'Ошибка авторизации': 'Authorization error',
+    'Файл': 'File',
+    'ф/мин': 'f/min',
+    'Настройки сохранены': 'Settings saved',
+    'ОШИБКА': 'ERROR',
+    'Скачивание завершено': 'Download complete',
+    'Ожидание': 'Waiting',
+    'Скачанные файлы удалены.': 'Downloaded files deleted.',
+    'Ошибка удаления файлов:': 'Error deleting files:',
+    'Прогресс канала и история сброшены!': 'Channel progress and history reset!',
+    'Общие настройки': 'General Settings',
 }
 
 lines = content.split('\n')

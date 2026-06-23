@@ -84,6 +84,21 @@ TRANSLATIONS = {
         "Всего файлов": "Total files",
         "Обработано": "Processed",
         "Всего сообщений": "Total messages",
+        "Общие настройки": "General Settings",
+        "Прогресс канала и история сброшены!": "Channel progress and history reset!",
+        "Ошибка удаления файлов:": "Error deleting files:",
+        "Скачанные файлы удалены.": "Downloaded files deleted.",
+        "ОШИБКА": "ERROR",
+        "Настройки сохранены": "Settings saved",
+        "ф/мин": "f/min",
+        "Ошибка авторизации": "Authorization error",
+        "Подключение...": "Connecting...",
+        "Ошибка при удалении сессии:": "Error deleting session:",
+        "Сессия удалена. Выполнен выход из аккаунта.": "Session deleted. Logged out of account.",
+        "Ошибка:": "Error:",
+        "Успешная авторизация!": "Successful authorization!",
+        "Запрос авторизации...": "Authorization request...",
+        "Язык / Language": "Language / Язык",
     }
 }
 
