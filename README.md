@@ -7,65 +7,69 @@
   ![License](https://img.shields.io/badge/License-Proprietary-red.svg)
   ![OS](https://img.shields.io/badge/OS-Windows%20%7C%20Linux-lightgrey.svg)
   
-  [🇷🇺 Русский](#русский) • [🇬🇧 English](#english)
+  [Русский](#русский) | [English](#english)
 </div>
 
 ---
 
 <a name="русский"></a>
-## 🇷🇺 Русский
+## Русский
 
-**Telegram Channel Downloader** — это мощное десктопное приложение на базе Python и Flet, которое позволяет автоматизировать загрузку медиа и комментариев из любого Telegram канала, к которому у вас есть доступ.
+**Telegram Channel Downloader** — программное обеспечение для автоматизированного извлечения медиаданных и комментариев из информационных каналов Telegram.
 
-> **Примечание:** Программа скачивает **только те** медиафайлы (фото и видео) и комментарии, которые фактически доступны для чтения с вашего авторизованного аккаунта Telegram.
+**ВНИМАНИЕ:** Данное программное обеспечение разработано исключительно в образовательных целях. Программа не осуществляет обход систем защиты, использует официальный протокол авторизации и не нарушает правила использования (Terms of Service) мессенджера Telegram. Загрузка данных осуществляется строго в рамках прав доступа, предоставленных авторизованному пользовательскому аккаунту.
 
-### ✨ Функционал
-* **Современный интерфейс**: Чистый и динамичный графический интерфейс с темной темой и системными логами.
-* **Умный прогресс**: Отдельные динамические полосы загрузки для каждого скачиваемого файла.
-* **Live-Мониторинг**: Мониторинг каналов в реальном времени с автоматическим скачиванием новых постов по мере их публикации.
-* **Два языка**: Мгновенное переключение между русским и английским языками.
-* **Отказоустойчивость**: Умная обработка `FloodWait` и прерываний интернета с автоматическим возобновлением скачивания.
+### Функциональные возможности
+* **Асинхронная архитектура:** Реализация на базе библиотеки asyncio обеспечивает высокопроизводительную обработку данных и поддержку множественных параллельных потоков загрузки.
+* **Протокол MTProto:** Взаимодействие с серверами Telegram осуществляется через криптографический протокол MTProto (библиотека Telethon), что гарантирует максимальную скорость и безопасность соединения.
+* **Локальная СУБД:** Учет и контроль загруженных медиафайлов ведется посредством легковесной базы данных SQLite, предотвращая дублирование загрузок при повторных сессиях.
+* **Live-Мониторинг:** Модуль непрерывного мониторинга позволяет отслеживать целевые каналы в режиме реального времени с мгновенным извлечением нового контента.
+* **Динамический графический интерфейс:** Фронтенд приложения построен на базе фреймворка Flet (технология Flutter), обеспечивая информативную визуализацию процессов и детализированное логирование.
+* **Отказоустойчивость:** Интегрированы алгоритмы автоматического восстановления соединения при разрывах сети и обработки серверных ограничений (FloodWait).
+* **Локализация:** Поддерживается мгновенная смена языковых параметров интерфейса (Русский/English) без потери текущей сессии авторизации.
 
-### 🚀 Запуск и сборка
-1. Установите Python 3.11+.
-2. Установите зависимости:
+### Развертывание
+1. Требуется наличие установленной среды Python версии 3.11 или выше.
+2. Инсталляция зависимостей:
    ```bash
    pip install -r requirements.txt
    ```
-3. Запустите приложение:
+3. Запуск исполнительного модуля:
    ```bash
    python main_flet.py
    ```
 
-### 📄 Лицензия
-Это программное обеспечение предоставляется по **проприетарной лицензии (Proprietary Software License)**. Подробные условия использования смотрите в файле `LICENSE`.
+### Лицензия
+Программное обеспечение распространяется на условиях проприетарной лицензии (Proprietary Software License). Детальные условия эксплуатации приведены в файле `LICENSE`.
 
 ---
 
 <a name="english"></a>
-## 🇬🇧 English
+## English
 
-**Telegram Channel Downloader** is a powerful desktop application built with Python and Flet that allows you to automate media and comments downloading from any Telegram channel you have access to.
+**Telegram Channel Downloader** is software designed for automated extraction of media data and comments from Telegram channels.
 
-> **Note:** The program only downloads media (photos and videos) and comments that are actually accessible and readable from your currently authorized Telegram account.
+**WARNING:** This software is developed strictly for educational purposes. The application does not bypass any security systems, utilizes the official authorization protocol, and does not violate the Telegram Terms of Service. Data extraction is performed strictly within the access rights granted to the authorized user account.
 
-### ✨ Features
-* **Modern Interface**: Clean and dynamic GUI with a dark theme and system logs.
-* **Smart Progress**: Separate dynamic progress bars for each active file download.
-* **Live Monitor**: Watch channels in real-time and automatically download new posts as soon as they are published.
-* **Bilingual Support**: Instant switching between Russian and English.
-* **Resilience**: Smart handling of `FloodWait` and network interruptions with auto-resume.
+### Technical Capabilities
+* **Asynchronous Architecture:** Implemented utilizing the asyncio library to ensure high-performance data processing and support for multiple parallel download streams.
+* **MTProto Protocol:** Communication with Telegram servers is established via the MTProto cryptographic protocol (Telethon library), ensuring maximum speed and connection security.
+* **Local DBMS:** Downloaded media files are tracked and controlled through a lightweight SQLite database, preventing duplicate downloads during subsequent sessions.
+* **Live Monitoring:** The continuous monitoring module enables real-time tracking of target channels with immediate extraction of new content.
+* **Dynamic GUI:** The application frontend is built on the Flet framework (Flutter technology), providing informative process visualization and detailed logging.
+* **Fault Tolerance:** Integrated algorithms for automatic connection recovery during network interruptions and server restriction handling (FloodWait).
+* **Localization:** Supports instant switching of interface language parameters (Russian/English) without terminating the current authorization session.
 
-### 🚀 Setup & Build
-1. Install Python 3.11+.
-2. Install dependencies:
+### Deployment
+1. Python environment version 3.11 or higher is required.
+2. Dependency installation:
    ```bash
    pip install -r requirements.txt
    ```
-3. Run the application:
+3. Execution:
    ```bash
    python main_flet.py
    ```
 
-### 📄 License
-This software is provided under a **Proprietary Software License**. See the `LICENSE` file for full terms and conditions.
+### License
+This software is distributed under a Proprietary Software License. Detailed operating conditions are provided in the `LICENSE` file.
