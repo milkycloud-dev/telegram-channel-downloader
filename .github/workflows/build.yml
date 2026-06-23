@@ -5,6 +5,9 @@ on:
     tags:
       - 'v*'
 
+permissions:
+  contents: write
+
 jobs:
   build:
     name: Build on ${{ matrix.os }}
@@ -38,16 +41,18 @@ jobs:
       run: |
         pyinstaller --noconfirm --onedir --windowed --name "Telegram Channel Downloader" "main_flet.py"
 
-    - name: Upload Windows Artifact
+    - name: Zip Windows Release
       if: matrix.os == 'windows-latest'
-      uses: actions/upload-artifact@v3
-      with:
-        name: Windows-Release
-        path: dist/Telegram Channel Downloader
+      run: Compress-Archive -Path "dist/Telegram Channel Downloader" -DestinationPath "Telegram_Channel_Downloader_Windows.zip"
 
-    - name: Upload Linux Artifact
+    - name: Tar Linux Release
       if: matrix.os == 'ubuntu-latest'
-      uses: actions/upload-artifact@v3
+      run: tar -czf Telegram_Channel_Downloader_Linux.tar.gz -C dist "Telegram Channel Downloader"
+
+    - name: Upload Release Assets
+      uses: softprops/action-gh-release@v1
+      if: startsWith(github.ref, 'refs/tags/')
       with:
-        name: Linux-Release
-        path: dist/Telegram Channel Downloader
+        files: |
+          Telegram_Channel_Downloader_Windows.zip
+          Telegram_Channel_Downloader_Linux.tar.gz
