@@ -616,11 +616,14 @@ def _render_comments(comments: list) -> str:
 
         media_html = _render_media(c.get("media_files", []), c.get("media_type"))
 
+        text_div = f'<div class="comment-text">{text}</div>' if text else ""
+        time_span = f'<span class="message-time">{date_str}</span>' if date_str else ""
+        
         html += (
             f'<div class="comment">'
-            f'{f"<div class=\"comment-text\">{text}</div>" if text else ""}'
+            f'{text_div}'
             f'{media_html}'
-            f'{f"<span class=\"message-time\">{date_str}</span>" if date_str else ""}'
+            f'{time_span}'
             f'</div>'
         )
 

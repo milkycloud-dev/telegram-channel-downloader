@@ -30,6 +30,7 @@ from telethon.tl.types import (
     DocumentAttributeAnimated, # GIF animation attribute
     DocumentAttributeFilename, # Document filename attribute
 )
+from html_generator import generate_channel_html
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -469,9 +470,13 @@ class ScraperCore:
             self._emit("on_complete")
 
     async def stop(self):
-        """Signal all running operations to stop."""
+        """Signal all running operations to stop and instantly cancel active downloads."""
         self._stop.set()
         self.is_subscribing = False
+        # Instantly abort ongoing download tasks
+        for task in self._dl_tasks:
+            if not task.done():
+                task.cancel()
 
     async def start_monitor(self):
         """
@@ -702,6 +707,13 @@ class ScraperCore:
 
         if new_count > 0:
             self._emit("on_status", t("new_files_downloaded", new_count))
+            # Auto-generate HTML on the fly
+            title = getattr(channel, "title", str(channel.id))
+            try:
+                loop = asyncio.get_running_loop()
+                await loop.run_in_executor(None, generate_channel_html, dl_dir, title)
+            except Exception as e:
+                self._emit("on_log", {"level": "ERROR", "msg": f"HTML generation error: {e}"})
 
     async def _run_download(self):
         """
@@ -816,6 +828,16 @@ class ScraperCore:
             save_config(self.config)
 
             self._update_progress(total_done)
+
+            # Auto-generate HTML on the fly after EVERY post
+            if processed_this_run > 0:
+                self._save_channel_data(dl_dir)
+                try:
+                    loop = asyncio.get_running_loop()
+                    await loop.run_in_executor(None, generate_channel_html, dl_dir, title)
+                except Exception as e:
+                    self._emit("on_log", {"level": "ERROR", "msg": f"HTML generation error: {e}"})
+
             await asyncio.sleep(self.config.get("delay_between_posts", 1.0))
 
         # Wait for all pending background downloads

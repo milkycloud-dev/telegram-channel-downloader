@@ -680,6 +680,11 @@ class TelegramScraperFlet:
         dl_dir = ch_state.get("download_dir", "downloads")
 
         self.write_log(t("generating_html"))
+        
+        def close_dlg(e):
+            dlg.open = False
+            self.page.update()
+
         try:
             channel_name = str(cfg.get("channel_id", "Channel"))
             # Try to get actual channel name if connected
@@ -694,12 +699,28 @@ class TelegramScraperFlet:
             result = generate_channel_html(dl_dir, channel_name)
             if result:
                 self.write_log(t("html_generated", result), ft.colors.GREEN_400)
-                self.page.snack_bar = ft.SnackBar(ft.Text(t("html_generated", os.path.basename(result))))
-                self.page.snack_bar.open = True
+                dlg = ft.AlertDialog(
+                    title=ft.Text("HTML Viewer"),
+                    content=ft.Text(f"Successfully generated HTML viewer!\nPath: {result}"),
+                    actions=[ft.TextButton("OK", on_click=close_dlg)]
+                )
             else:
                 self.write_log(t("html_error", "No data found"), ft.colors.ORANGE_400)
+                dlg = ft.AlertDialog(
+                    title=ft.Text("Error"),
+                    content=ft.Text("Could not generate HTML. Have you downloaded any posts yet? (channel_data.json is missing or empty)"),
+                    actions=[ft.TextButton("OK", on_click=close_dlg)]
+                )
         except Exception as ex:
             self.write_log(t("html_error", str(ex)), ft.colors.RED_400)
+            dlg = ft.AlertDialog(
+                title=ft.Text("Error"),
+                content=ft.Text(f"Exception while generating HTML:\n{str(ex)}"),
+                actions=[ft.TextButton("OK", on_click=close_dlg)]
+            )
+            
+        self.page.overlay.append(dlg)
+        dlg.open = True
         self.page.update()
 
     async def on_open_html(self, e):
@@ -713,6 +734,16 @@ class TelegramScraperFlet:
             webbrowser.open(f"file:///{os.path.abspath(html_path)}")
         else:
             self.write_log(t("html_error", "index.html not found"), ft.colors.ORANGE_400)
+            def close_dlg(e):
+                dlg.open = False
+                self.page.update()
+            dlg = ft.AlertDialog(
+                title=ft.Text("Error"),
+                content=ft.Text("index.html not found. Please click 'Regenerate HTML' first."),
+                actions=[ft.TextButton("OK", on_click=close_dlg)]
+            )
+            self.page.overlay.append(dlg)
+            dlg.open = True
             self.page.update()
 
     async def on_reset(self, e):
