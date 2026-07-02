@@ -31,19 +31,19 @@ jobs:
         pip install -r requirements.txt
         pip install pyinstaller
 
-    - name: Build with PyInstaller (Windows)
+    - name: Build with Flet (Windows)
       if: matrix.os == 'windows-latest'
       run: |
-        pyinstaller --noconfirm --onedir --windowed --icon "assets/icon.png" --name "Telegram Secret Channel Downloader" --add-data "html_generator.py;." --add-data "i18n.py;." --add-data "scraper_core.py;." "main_flet.py"
+        flet pack main_flet.py --name "Telegram Secret Channel Downloader" --icon "assets/icon.png" --add-data "html_generator.py;." --add-data "i18n.py;." --add-data "scraper_core.py;."
 
-    - name: Build with PyInstaller (Linux)
+    - name: Build with Flet (Linux)
       if: matrix.os == 'ubuntu-latest'
       run: |
-        pyinstaller --noconfirm --onedir --windowed --name "Telegram Secret Channel Downloader" --add-data "html_generator.py:." --add-data "i18n.py:." --add-data "scraper_core.py:." "main_flet.py"
+        flet pack main_flet.py --name "Telegram Secret Channel Downloader" --add-data "html_generator.py:." --add-data "i18n.py:." --add-data "scraper_core.py:."
 
     - name: Zip Windows Release
       if: matrix.os == 'windows-latest'
-      run: Compress-Archive -Path "dist/Telegram Secret Channel Downloader" -DestinationPath "Telegram_Secret_Channel_Downloader_Windows.zip"
+      run: Compress-Archive -Path "dist/Telegram Secret Channel Downloader.exe" -DestinationPath "Telegram_Secret_Channel_Downloader_Windows.zip"
 
     - name: Tar Linux Release
       if: matrix.os == 'ubuntu-latest'
