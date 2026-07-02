@@ -1,10 +1,26 @@
-# Описание релиза 1.0.1
+# Release Notes — v2.0
 
-Произведена масштабная модернизация пользовательского интерфейса и системы локализации.
+## Telegram Secret Channel Downloader v2.0
 
-### Ключевые изменения:
-* **Модернизация системы локализации:** Проведена полная ревизия строковых ресурсов графического интерфейса. Все системные уведомления, логи авторизации и элементы управления переведены на английский язык, обеспечивая полное покрытие двуязычного интерфейса.
-* **Оптимизация панели управления:** Инструмент переключения языковых локалей перемещен из верхнего колонтитула в специализированный выпадающий список вкладки настроек. Данное архитектурное решение позволило оптимизировать рабочее пространство приложения.
-* **Сохранение сессионного контекста:** Внедрен алгоритм горячей замены языкового пакета (hot-swap). Изменение языка применяется мгновенно ко всем компонентам приложения без прерывания текущей сессии авторизации и сброса активных сетевых соединений.
-* **Исправление грамматических и синтаксических ошибок:** Проведен аудит корректности отображения текстовых данных в системных логах. Исправлены грамматические ошибки и устранены синтаксические конфликты (SyntaxError) в механизме форматирования строк.
-* **Оптимизация репозитория:** Выполнена очистка кодовой базы от неактуальных диагностических скриптов. В конфигурацию исключений внесены корректировки, надежно предотвращающие попадание конфигурационных данных, сессионных ключей и скачанных медиафайлов в систему контроля версий.
+Major release with complete rebrand, new features, and codebase overhaul.
+
+### 🚀 New Features
+
+* **Text Post Downloading:** The tool now downloads ALL content types — not just media. Text-only posts are saved alongside media files and included in the HTML viewer.
+* **Offline HTML Viewer:** Generate a self-contained HTML archive styled like Telegram Web with dark theme, search, pagination, image lightbox, and collapsible comments. All paths are relative for full portability.
+* **Complete Content Backup:** Posts, media, comments, metadata — everything is captured and stored in a structured `channel_data.json` for programmatic access.
+
+### 🔧 Improvements
+
+* **Full English Translation:** All code strings translated to English using a key-based i18n system. Russian available as a secondary language.
+* **English-Only Code Comments:** Every function documented with English docstrings. All Russian comments replaced.
+* **Code Cleanup:** Removed dead code (`main.py` that referenced non-existent `gui_app`), unused imports, and legacy patterns.
+* **Key-Based i18n:** Migrated from Russian-first `t("Русский текст")` to proper key-based `t('key')` approach with `lang.json` persistence.
+* **Language Selector:** Added language dropdown to Settings tab with instant hot-swap.
+* **Rebranding:** Project renamed to "Telegram Secret Channel Downloader" to better reflect capabilities with private/secret channels.
+* **Updated README:** Complete bilingual README with features, usage guide, and legal disclaimer.
+
+### ⚠️ Breaking Changes
+
+* i18n system is completely rewritten — custom translations from v1.x are not compatible.
+* `main.py` entry point removed — use `main_flet.py` directly.

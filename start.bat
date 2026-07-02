@@ -1,39 +1,39 @@
 @echo off
 chcp 65001 >nul
 echo ========================================================
-echo         Telegram Media Scraper v5.0 - Launcher
+echo    Telegram Secret Channel Downloader v2.0 - Launcher
 echo ========================================================
 echo.
 
-:: Проверка наличия Python
+:: Check for Python
 python --version >nul 2>&1
 if %errorlevel% neq 0 (
-    echo [ERROR] Python не найден! Установите Python и добавьте его в PATH.
+    echo [ERROR] Python not found! Please install Python and add it to PATH.
     pause
     exit /b
 )
 
-:: Установка основных зависимостей
-echo Установка/проверка базовых библиотек (Flet, Telethon и др.)...
+:: Install core dependencies
+echo Installing/checking core libraries (Flet, Telethon, etc.)...
 pip install -r requirements.txt
 if %errorlevel% neq 0 (
-    echo [ERROR] Ошибка установки библиотек!
+    echo [ERROR] Library installation failed!
     pause
     exit /b
 )
 
-:: Попытка установить cryptg (опционально)
+:: Try to install cryptg (optional speed optimizer)
 echo.
-echo Попытка установки cryptg (оптимизатор скорости)...
+echo Attempting to install cryptg (speed optimizer)...
 pip install cryptg --quiet
 if %errorlevel% neq 0 (
-    echo [INFO] Библиотека cryptg не установлена (нет готового wheel/компилятора).
-    echo [INFO] Программа будет работать стабильно, но чуть медленнее.
+    echo [INFO] cryptg not installed (no pre-built wheel/compiler available).
+    echo [INFO] The application will work fine, just slightly slower.
 ) else (
-    echo [INFO] Библиотека cryptg успешно установлена!
+    echo [INFO] cryptg installed successfully!
 )
 
 echo.
-echo Запускаем приложение...
+echo Starting application...
 start pythonw main_flet.py
 exit

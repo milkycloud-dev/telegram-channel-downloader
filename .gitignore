@@ -51,5 +51,9 @@ config.json
 .env
 .venv
 
-# Specific ignores for telegram-channel-downloader
+# Runtime data
+lang.json
+channel_data.json
+
+# Specific ignores for telegram-secret-channel-downloader
 # DO NOT COMMIT AUTH TOKENS OR SESSION FILES

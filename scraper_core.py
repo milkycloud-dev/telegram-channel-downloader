@@ -1,41 +1,39 @@
 """
-Telegram Media Scraper — Core Engine / Движок парсинга
-=====================================================
-Асинхронный движок для скачивания ВСЕХ типов медиа из Telegram-каналов
-и комментариев с поддержкой:
-  - Шифрованного соединения (MTProto — как в оф. Telegram)
-  - Устойчивости к обрывам сети (автоматический реконнект и повтор)
-  - Проверки целостности скачанных файлов
-  - Скачивания в максимальном качестве
-  - Раздельных папок для каждого канала
-
-Async engine for downloading ALL media types from Telegram channels
-and comments. Supports: MTProto encryption, network resilience,
-file integrity checks, max quality downloads, per-channel directories.
+Telegram Secret Channel Downloader — Core Engine
+=================================================
+Async engine for downloading ALL content types from Telegram channels:
+posts (text + media), comments, and metadata. Supports:
+  - MTProto encrypted connection (same as official Telegram)
+  - Network resilience with auto-reconnect and retry
+  - File integrity verification
+  - Max quality media downloads
+  - Per-channel download directories
+  - Structured data export to channel_data.json for offline HTML viewer
 """
 
 import os
 import json
 import asyncio
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
+from i18n import t
 from telethon import TelegramClient, errors
 from telethon.tl.types import (
-    MessageMediaWebPage,       # Ссылки-превью / Link previews
-    MessageMediaPoll,          # Опросы / Polls
-    MessageMediaGeo,           # Геолокация / Geolocation
-    MessageMediaGeoLive,       # Живая геолокация / Live geolocation
-    MessageMediaContact,       # Контакты / Contacts
-    MessageMediaDice,          # Кости/эмодзи / Dice/emoji
-    MessageMediaVenue,         # Места / Venues
-    DocumentAttributeAnimated, # Атрибут GIF-анимации / GIF animation attribute
-    DocumentAttributeFilename, # Имя файла документа / Document filename attribute
+    MessageMediaWebPage,       # Link previews
+    MessageMediaPoll,          # Polls
+    MessageMediaGeo,           # Geolocation
+    MessageMediaGeoLive,       # Live geolocation
+    MessageMediaContact,       # Contacts
+    MessageMediaDice,          # Dice/emoji
+    MessageMediaVenue,         # Venues
+    DocumentAttributeAnimated, # GIF animation attribute
+    DocumentAttributeFilename, # Document filename attribute
 )
 
 
 # ═══════════════════════════════════════════════════════════════════
-#  КОНФИГУРАЦИЯ / CONFIGURATION
+#  CONFIGURATION
 # ═══════════════════════════════════════════════════════════════════
 
 CONFIG_FILE = "config.json"
@@ -46,27 +44,24 @@ DEFAULT_CONFIG = {
     "api_hash": "b18441a1ff607e10a989891a5462e627",
     "phone": "",
 
-    # --- Текущий канал / Current channel ---
-    "channel_id": 1890961508,
-    "download_dir": "downloads",  # Директория по умолчанию / Default directory
+    # --- Current channel ---
+    "channel_id": 0,
+    "download_dir": "downloads",
 
-    # --- Задержки (сек) / Delays (seconds) ---
-    "delay_between_posts": 1.0,       # Рекомендуемая: 0.5-2.0 / Recommended: 0.5-2.0
-    "delay_between_comments": 0.5,    # Рекомендуемая: 0.3-1.0 / Recommended: 0.3-1.0
-    "flood_wait_multiplier": 1.5,     # Множитель при FloodWait / FloodWait multiplier
-    "subscribe_interval": 60,         # Интервал мониторинга (сек) / Monitoring interval (sec)
+    # --- Delays (seconds) ---
+    "delay_between_posts": 1.0,
+    "delay_between_comments": 0.5,
+    "flood_wait_multiplier": 1.5,
+    "subscribe_interval": 60,
 
-    # --- Сетевая устойчивость / Network resilience ---
-    "max_retries": 30,                # Макс. попыток скачивания / Max download retries
-    "network_check_interval": 5,      # Интервал проверки сети (сек) / Network check interval (sec)
+    # --- Network resilience ---
+    "max_retries": 30,
+    "network_check_interval": 5,
 
-    # --- Состояние каналов / Per-channel state ---
-    # Автоматически заполняется при работе / Populated automatically
-    # "channels": { "channel_id": { "download_dir": "...", "last_msg_id": 0, "post_counter": 0, "processed_msgs": 0 } }
+    # --- Per-channel state (populated automatically) ---
     "channels": {},
 }
 
-# Типы медиа, которые нельзя скачать как файл
 # Media types that cannot be downloaded as files
 _SKIP_MEDIA = (
     MessageMediaWebPage,
@@ -82,22 +77,23 @@ _SKIP_MEDIA = (
 
 def load_config() -> dict:
     """
-    Загрузить конфиг из файла или вернуть дефолтный.
-    Load config from file or return defaults.
-    Handles migration from old single-channel format.
+    Load configuration from file or return defaults.
+
+    Handles migration from old single-channel format to per-channel state.
+    Falls back to Telegram Desktop API credentials if none provided.
     """
     if os.path.exists(CONFIG_FILE):
         with open(CONFIG_FILE, "r", encoding="utf-8") as f:
             saved = json.load(f)
         cfg = DEFAULT_CONFIG.copy()
         cfg.update(saved)
-        
-        # Если api_id или api_hash пустые, подставляем дефолтные (Telegram Desktop)
+
+        # Fall back to Telegram Desktop credentials if empty
         if not cfg.get("api_id") or str(cfg.get("api_id")) == "0" or not cfg.get("api_hash"):
             cfg["api_id"] = 2040
             cfg["api_hash"] = "b18441a1ff607e10a989891a5462e627"
 
-        # Миграция старого формата / Migrate old format
+        # Migrate old single-channel format to per-channel state
         if "last_downloaded_msg_id" in cfg:
             cid = str(cfg.get("channel_id", 0))
             ch = cfg.setdefault("channels", {}).setdefault(cid, {})
@@ -112,21 +108,21 @@ def load_config() -> dict:
 
 
 def save_config(cfg: dict):
-    """Сохранить конфиг в файл. / Save config to file."""
+    """Save configuration dictionary to the config file."""
     with open(CONFIG_FILE, "w", encoding="utf-8") as f:
         json.dump(cfg, f, ensure_ascii=False, indent=2)
 
 
 def get_channel_state(config: dict) -> dict:
     """
-    Получить состояние текущего канала (папка, прогресс).
-    Get state for the currently selected channel (dir, progress).
-    Creates default state if channel not yet tracked.
+    Get the state for the currently selected channel.
+
+    Returns a dict with download_dir, last_msg_id, post_counter,
+    and processed_msgs. Creates default state if the channel is new.
     """
     cid = str(config.get("channel_id", 0))
     channels = config.setdefault("channels", {})
     if cid not in channels:
-        # Для нового канала создаём подпапку / Create subfolder for new channel
         default_dir = os.path.join(
             config.get("download_dir", "downloads"), f"channel_{cid}"
         )
@@ -140,19 +136,20 @@ def get_channel_state(config: dict) -> dict:
 
 
 # ═══════════════════════════════════════════════════════════════════
-#  СТАТИСТИКА / STATISTICS
+#  STATISTICS
 # ═══════════════════════════════════════════════════════════════════
 
 @dataclass
 class ScraperStats:
-    """Статистика скачивания. / Download statistics."""
-    total_channel_msgs: int = 0      # Всего сообщений / Total messages
-    processed_msgs: int = 0          # Обработано / Processed
-    downloaded_post_files: int = 0   # Файлов из постов / Files from posts
-    downloaded_comment_files: int = 0 # Файлов из комментов / Files from comments
-    total_files: int = 0             # Всего файлов / Total files
-    total_size_bytes: int = 0        # Общий размер / Total size
-    # Разбивка по типам / Breakdown by type
+    """Tracks download statistics for a scraping session."""
+    total_channel_msgs: int = 0
+    processed_msgs: int = 0
+    downloaded_post_files: int = 0
+    downloaded_comment_files: int = 0
+    total_files: int = 0
+    total_size_bytes: int = 0
+    text_posts: int = 0
+    # Breakdown by media type
     photos: int = 0
     videos: int = 0
     documents: int = 0
@@ -161,21 +158,21 @@ class ScraperStats:
     audio_files: int = 0
     stickers: int = 0
     gifs: int = 0
-    # Прогресс / Progress
+    # Progress tracking
     start_time: float = 0.0
     current_post_num: int = 0
     current_post_comments_total: int = 0
     current_post_comments_done: int = 0
-    # Сетевая устойчивость / Network resilience
-    retries_total: int = 0           # Всего повторных попыток / Total retries
-    integrity_failures: int = 0       # Сбоев целостности / Integrity failures
+    # Network resilience counters
+    retries_total: int = 0
+    integrity_failures: int = 0
 
 
 # ═══════════════════════════════════════════════════════════════════
-#  КЛАССИФИКАЦИЯ МЕДИА / MEDIA CLASSIFICATION
+#  MEDIA CLASSIFICATION
 # ═══════════════════════════════════════════════════════════════════
 
-# Маппинг типа медиа → поле статистики / Media type → stats field mapping
+# Mapping of media type string to ScraperStats field name
 _TYPE_TO_STAT = {
     "photo": "photos",
     "video": "videos",
@@ -187,31 +184,36 @@ _TYPE_TO_STAT = {
     "gif": "gifs",
 }
 
-# Человекочитаемые метки / Human-readable labels
-_TYPE_LABELS = {
-    "photo": "📷 Фото",
-    "video": "🎬 Видео",
-    "document": "📄 Документ",
-    "voice": "🎤 Голосовое",
-    "video_note": "🔵 Кружок",
-    "audio": "🎵 Аудио",
-    "sticker": "🏷 Стикер",
-    "gif": "🎞 GIF",
-    "unknown": "❓ Неизвестно",
+# Mapping of media type string to i18n translation key
+_TYPE_LABEL_KEYS = {
+    "photo": "media_photo",
+    "video": "media_video",
+    "document": "media_document",
+    "voice": "media_voice",
+    "video_note": "media_video_note",
+    "audio": "media_audio",
+    "sticker": "media_sticker",
+    "gif": "media_gif",
+    "unknown": "media_unknown",
+    "text": "media_text",
 }
 
 
 def classify_media(message) -> str | None:
     """
-    Определить тип медиа в сообщении.
     Classify the media type in a Telegram message.
-    Returns: type string or None if no recognizable media.
+
+    Checks message attributes in priority order to correctly identify
+    video notes before videos, and voice messages before audio.
+
+    Returns:
+        Media type string ('photo', 'video', etc.) or None if no media.
     """
     if message.photo:
         return "photo"
-    if message.video_note:      # Проверяем ДО video / Check BEFORE video
+    if message.video_note:
         return "video_note"
-    if message.voice:           # Проверяем ДО audio / Check BEFORE audio
+    if message.voice:
         return "voice"
     if message.video:
         return "video"
@@ -221,7 +223,6 @@ def classify_media(message) -> str | None:
         return "sticker"
     if message.document:
         doc = message.document
-        # GIF — это документ с атрибутом Animated / GIF is a document with Animated attr
         if any(isinstance(a, DocumentAttributeAnimated) for a in (doc.attributes or [])):
             return "gif"
         return "document"
@@ -229,23 +230,23 @@ def classify_media(message) -> str | None:
 
 
 # ═══════════════════════════════════════════════════════════════════
-#  ФОРМАТИРОВАНИЕ / FORMATTING HELPERS
+#  FORMATTING HELPERS
 # ═══════════════════════════════════════════════════════════════════
 
 def format_size(size_bytes: int) -> str:
-    """Форматировать размер файла. / Format file size."""
+    """Format a byte count into a human-readable size string."""
     if size_bytes < 1024:
-        return f"{size_bytes} Б"
+        return t("size_b", size_bytes)
     elif size_bytes < 1024 ** 2:
-        return f"{size_bytes / 1024:.1f} КБ"
+        return t("size_kb", size_bytes / 1024)
     elif size_bytes < 1024 ** 3:
-        return f"{size_bytes / 1024 ** 2:.1f} МБ"
+        return t("size_mb", size_bytes / 1024 ** 2)
     else:
-        return f"{size_bytes / 1024 ** 3:.2f} ГБ"
+        return t("size_gb", size_bytes / 1024 ** 3)
 
 
 def format_duration(seconds: float) -> str:
-    """Форматировать длительность в ЧЧ:ММ:СС. / Format duration as HH:MM:SS."""
+    """Format a duration in seconds to HH:MM:SS string."""
     h = int(seconds) // 3600
     m = (int(seconds) % 3600) // 60
     s = int(seconds) % 60
@@ -253,24 +254,25 @@ def format_duration(seconds: float) -> str:
 
 
 # ═══════════════════════════════════════════════════════════════════
-#  ДВИЖОК ПАРСИНГА / SCRAPER ENGINE
+#  SCRAPER ENGINE
 # ═══════════════════════════════════════════════════════════════════
 
 class ScraperCore:
     """
-    Асинхронный движок скачивания медиа из Telegram-канала.
-    Async engine for downloading media from a Telegram channel.
+    Async engine for downloading all content from a Telegram channel.
 
-    Возможности / Features:
-    - MTProto шифрование (как в оф. Telegram) / MTProto encryption
-    - Автоматическое переподключение / Auto-reconnect
-    - Повтор скачивания при ошибках (до max_retries раз) / Retry on errors
-    - Проверка целостности файлов / File integrity verification
-    - Скачивание в максимальном качестве / Max quality downloads
-    - Раздельные папки для каждого канала / Per-channel directories
+    Features:
+    - MTProto encryption (same as official Telegram apps)
+    - Auto-reconnect on network drops
+    - Retry on download errors (up to max_retries)
+    - File integrity verification
+    - Max quality media downloads
+    - Per-channel download directories
+    - Structured data collection for offline HTML viewer
     """
 
     def __init__(self):
+        """Initialize the scraper with default config and empty state."""
         self.config: dict = load_config()
         self.client: TelegramClient | None = None
         self.stats = ScraperStats()
@@ -278,9 +280,12 @@ class ScraperCore:
         self.is_running = False
         self.is_subscribing = False
 
-        # Коллбэки — устанавливаются GUI-ом / Callbacks — set by GUI
+        # Collected post data for HTML export
+        self.posts_data: list[dict] = []
+
+        # Callbacks set by the GUI layer
         self.on_log = None            # (dict) -> None
-        self.on_progress = None       # (float, int, int) -> None — fraction, done, total
+        self.on_progress = None       # (prefix, frac, done, total) -> None
         self.on_stats = None          # (ScraperStats) -> None
         self._dl_semaphore = None
         self._dl_tasks = []
@@ -290,10 +295,16 @@ class ScraperCore:
         self.on_qr_url = None         # (str) -> None
         self.request_input = None     # async (title, prompt) -> str | None
 
-    def _get_history_file(self, channel_id):
+    def _get_history_file(self, channel_id) -> str:
+        """Return the path to the download history file for a channel."""
         return os.path.join(os.path.dirname(__file__), f"history_{channel_id}.txt")
 
     def _load_downloaded_ids(self, channel_id) -> set:
+        """
+        Load the set of already-downloaded message IDs from the history file.
+
+        Returns an empty set if the file doesn't exist or can't be read.
+        """
         path = self._get_history_file(channel_id)
         if not os.path.exists(path):
             return set()
@@ -304,75 +315,68 @@ class ScraperCore:
                     line = line.strip()
                     if line:
                         ids.add(line)
-        except:
+        except Exception:
             pass
         return ids
 
     def _mark_as_downloaded(self, channel_id, msg_id):
+        """Append a message ID to the download history file."""
         path = self._get_history_file(channel_id)
         try:
             with open(path, "a", encoding="utf-8") as f:
                 f.write(f"{msg_id}\n")
-        except:
+        except Exception:
             pass
 
-    # ── Подключение / Авторизация ─────────────────────────────
-    #    Connection / Authorization
+    # ── Connection / Authorization ──────────────────────────────
 
     def _make_client(self) -> TelegramClient:
         """
-        Создать клиент Telethon с защищённым соединением.
-        Create Telethon client with secure connection settings.
+        Create a Telethon client with secure connection settings.
 
-        БЕЗОПАСНОСТЬ / SECURITY:
-        Telethon использует протокол MTProto — тот же протокол шифрования,
-        что и официальные приложения Telegram. Все данные шифруются
-        между клиентом и серверами Telegram.
-
-        Telethon uses the MTProto protocol — the same encryption protocol
-        as official Telegram apps. All data is encrypted between the
-        client and Telegram servers.
+        Uses the MTProto protocol — the same encryption as official
+        Telegram apps. All data is encrypted between client and servers.
         """
         return TelegramClient(
             "telegram_session",
             int(self.config["api_id"]),
             self.config["api_hash"],
-            # === Настройки безопасности и надёжности ===
-            # === Security and reliability settings ===
-            connection_retries=10,    # Автоповтор подключения / Auto-retry connection
-            retry_delay=2,            # Задержка между попытками (сек) / Delay between retries
-            auto_reconnect=True,      # Автопереподключение при обрыве / Auto-reconnect on drop
-            request_retries=5,        # Повтор неудачных API-запросов / Retry failed API requests
-            flood_sleep_threshold=60, # Авто-ожидание FloodWait до 60с / Auto-wait FloodWait up to 60s
+            connection_retries=10,
+            retry_delay=2,
+            auto_reconnect=True,
+            request_retries=5,
+            flood_sleep_threshold=60,
         )
 
     async def connect(self):
-        """Подключиться к Telegram (MTProto). / Connect to Telegram (MTProto)."""
+        """Establish connection to Telegram via MTProto."""
         self.client = self._make_client()
         await self.client.connect()
 
     async def is_authorized(self) -> bool:
-        """Проверить авторизацию. / Check authorization status."""
+        """Check if the current session is authorized."""
         if self.client is None or not self.client.is_connected():
             return False
         return await self.client.is_user_authorized()
 
     async def authorize(self) -> bool:
         """
-        Полный цикл авторизации с диалогами для кода и 2FA.
-        Full authorization flow with code and 2FA dialogs.
+        Run the full authorization flow.
+
+        Supports both QR code and phone number authentication,
+        including two-factor authentication (2FA).
         """
         if self.client is None:
             await self.connect()
 
         if await self.client.is_user_authorized():
-            self._emit("on_status", "✅ Уже авторизован / Already authorized")
+            self._emit("on_status", t("already_authorized"))
             return True
 
-        self._emit("on_status", "⏳ Требуется авторизация / Auth required...")
+        self._emit("on_status", t("auth_required"))
 
-        # Запрашиваем выбор метода / Request method selection
-        auth_method = await self.request_input("Авторизация", "AUTH_MODE")
+        # Request auth method selection from the GUI
+        auth_method = await self.request_input(t("auth_title"), "AUTH_MODE")
         if not auth_method:
             return False
 
@@ -380,110 +384,118 @@ class ScraperCore:
             try:
                 qr_login = await self.client.qr_login()
                 self._emit("on_qr_url", qr_login.url)
-                
-                # Wait for user to scan QR code / authorize via browser (timeout 120s)
+
                 try:
                     await asyncio.wait_for(qr_login.wait(), timeout=120)
                 except asyncio.TimeoutError:
-                    self._emit("on_auth_error", "Время ожидания авторизации истекло / Auth timeout")
+                    self._emit("on_auth_error", t("auth_timeout"))
                     return False
             except errors.SessionPasswordNeededError:
-                pwd = await self.request_input("Двухфакторная аутентификация", "Введите пароль 2FA:")
-                if not pwd: return False
+                pwd = await self.request_input(t("2fa_title"), t("2fa_prompt"))
+                if not pwd:
+                    return False
                 try:
                     await self.client.sign_in(password=pwd)
                 except Exception as e:
-                    self._emit("on_auth_error", f"Ошибка 2FA (QR): {e}")
+                    self._emit("on_auth_error", f"{t('2fa_error_qr')} {e}")
                     return False
             except Exception as e:
-                self._emit("on_auth_error", f"Ошибка QR авторизации / QR Auth error: {e}")
+                self._emit("on_auth_error", f"{t('qr_auth_error')} {e}")
                 return False
         else:
-            # Phone auth
+            # Phone number authentication
             phone = self.config.get("phone", "").strip()
             if not phone:
-                phone = await self.request_input("Телефон", "Введите номер телефона (с +):")
-                if not phone: return False
+                phone = await self.request_input(t("phone_title"), t("phone_prompt"))
+                if not phone:
+                    return False
 
             try:
                 res = await self.client.send_code_request(phone)
             except Exception as e:
-                self._emit("on_auth_error", f"Ошибка отправки кода / Code send error: {e}")
+                self._emit("on_auth_error", f"{t('code_send_error')} {e}")
                 return False
 
-            code = await self.request_input("Код подтверждения", "Введите код из Telegram:")
-            if not code: return False
+            code = await self.request_input(t("code_title"), t("code_prompt"))
+            if not code:
+                return False
 
             try:
                 await self.client.sign_in(phone, code.strip(), phone_code_hash=res.phone_code_hash)
             except errors.SessionPasswordNeededError:
-                pwd = await self.request_input("Двухфакторная аутентификация", "Введите пароль 2FA:")
-                if not pwd: return False
+                pwd = await self.request_input(t("2fa_title"), t("2fa_prompt"))
+                if not pwd:
+                    return False
                 try:
                     await self.client.sign_in(password=pwd)
                 except Exception as e:
-                    self._emit("on_auth_error", f"Ошибка 2FA: {e}")
+                    self._emit("on_auth_error", f"{t('2fa_error')} {e}")
                     return False
             except Exception as e:
-                self._emit("on_auth_error", f"Ошибка входа / Login error: {e}")
+                self._emit("on_auth_error", f"{t('login_error')} {e}")
                 return False
 
-        self._emit("on_status", "✅ Авторизация успешна! / Authorization successful!")
+        self._emit("on_status", t("auth_success_full"))
         return True
 
     async def disconnect(self):
-        """Отключиться от Telegram. / Disconnect from Telegram."""
+        """Disconnect from Telegram gracefully."""
         if self.client and self.client.is_connected():
             await self.client.disconnect()
 
-    # ── Скачивание / Download ─────────────────────────────────
+    # ── Download Operations ─────────────────────────────────────
 
     async def start_download(self):
         """
-        Запустить полное скачивание канала.
-        Start full channel download.
+        Start the full channel download process.
+
+        Initializes statistics, runs the main download loop,
+        and handles cancellation and errors gracefully.
         """
         self._stop.clear()
         self.is_running = True
         self.stats = ScraperStats()
         self.stats.start_time = time.time()
+        self.posts_data = []
 
         try:
             await self._run_download()
         except asyncio.CancelledError:
-            self._emit("on_status", "⏹ Остановлено / Stopped")
+            self._emit("on_status", t("stopped"))
         except Exception as e:
-            self._emit("on_error", f"Критическая ошибка / Critical error: {e}")
+            self._emit("on_error", t("critical_error", e))
         finally:
             self.is_running = False
             self._emit("on_complete")
 
     async def stop(self):
-        """Остановить текущую операцию. / Stop current operation."""
+        """Signal all running operations to stop."""
         self._stop.set()
         self.is_subscribing = False
 
     async def start_monitor(self):
         """
-        Режим Live-мониторинга. Ищет новые посты, но не скачивает их автоматически.
-        Live-monitor mode. Finds new posts but doesn't auto-download them.
+        Start live monitoring mode.
+
+        Periodically checks for new posts in the channel and downloads
+        them automatically. Runs until stopped by the user.
         """
         self._stop.clear()
         self.is_subscribing = True
         self.is_running = True
-        
+
         interval = float(self.config.get("subscribe_interval", 600))
 
         try:
             while not self._stop.is_set() and self.is_subscribing:
-                self._emit("on_status", "🔄 Проверка новых постов... / Checking for new posts...")
+                self._emit("on_status", t("checking_new_posts"))
                 await self._check_new_posts()
-                
+
                 if self._stop.is_set() or not self.is_subscribing:
                     break
-                
-                self._emit("on_status", f"⏳ Ожидание {interval} сек... / Waiting {interval} sec...")
-                
+
+                self._emit("on_status", t("monitor_waiting", interval))
+
                 waited = 0
                 while waited < interval:
                     if self._stop.is_set() or not self.is_subscribing:
@@ -492,116 +504,139 @@ class ScraperCore:
                     waited += 1
 
         except asyncio.CancelledError:
-            self._emit("on_status", "⏹ Мониторинг остановлен / Monitoring stopped")
+            self._emit("on_status", t("monitor_stopped"))
         except Exception as e:
-            self._emit("on_error", f"Ошибка мониторинга / Monitor error: {e}")
+            self._emit("on_error", t("monitor_error", e))
         finally:
             self.is_subscribing = False
             self.is_running = False
             self._emit("on_complete")
 
     async def scan_missing_posts(self):
-        """Сканирует канал и ищет сообщения, которых нет в базе."""
+        """
+        Scan the channel and count messages not in the download history.
+
+        Reports the number of missing posts without downloading them.
+        """
         channel = await self._resolve_channel()
-        if not channel: return
+        if not channel:
+            return
         downloaded_ids = self._load_downloaded_ids(channel.id)
-        
+
         self.is_running = True
         self._stop.clear()
-        self._emit("on_status", "🔍 Сканирование канала на пропущенные файлы... / Scanning for missing files...")
-        
+        self._emit("on_status", t("scanning_missing"))
+
         missing_count = 0
-        total_count = 0
         try:
             async for message in self.client.iter_messages(channel):
                 if self._stop.is_set():
                     break
-                total_count += 1
                 if str(message.id) not in downloaded_ids and not message.action:
-                    if self._has_downloadable_media(message) or (message.replies and message.replies.replies > 0):
+                    if self._has_downloadable_media(message) or \
+                       message.text or \
+                       (message.replies and message.replies.replies > 0):
                         missing_count += 1
-                        
+
             if not self._stop.is_set():
-                self._emit("on_status", f"📊 Найдено {missing_count} пропущенных постов (Всего в истории скачано: {len(downloaded_ids)})")
-                self._emit("on_log", {"level": "INFO", "msg": f"Сканирование завершено. Пропущено: {missing_count} шт."})
+                self._emit("on_status", t("scan_result", missing_count, len(downloaded_ids)))
+                self._emit("on_log", {"level": "INFO", "msg": t("scan_complete_log", missing_count)})
         except Exception as e:
-            self._emit("on_error", f"Ошибка сканирования: {e}")
+            self._emit("on_error", t("scan_error", e))
         finally:
             self.is_running = False
 
     async def download_missing_posts(self):
-        """Скачивает только пропущенные сообщения."""
+        """
+        Download only messages that are missing from the download history.
+
+        Iterates all channel messages, skips already-downloaded ones,
+        and downloads the rest in chronological order.
+        """
         channel = await self._resolve_channel()
-        if not channel: return
+        if not channel:
+            return
         downloaded_ids = self._load_downloaded_ids(channel.id)
-        
+
         ch_state = get_channel_state(self.config)
         dl_dir = ch_state.get("download_dir", "downloads")
         os.makedirs(dl_dir, exist_ok=True)
-        
+
         self.is_running = True
         self._stop.clear()
-        
         self._dl_semaphore = asyncio.Semaphore(3)
         self._dl_tasks = []
-        
-        self._emit("on_status", "🔍 Поиск пропущенных постов для скачивания...")
+
+        self._emit("on_status", t("searching_missing"))
         missing_msgs = []
         try:
             async for message in self.client.iter_messages(channel):
-                if self._stop.is_set(): break
+                if self._stop.is_set():
+                    break
                 if str(message.id) not in downloaded_ids and not message.action:
-                    if self._has_downloadable_media(message) or (message.replies and message.replies.replies > 0):
+                    if self._has_downloadable_media(message) or \
+                       message.text or \
+                       (message.replies and message.replies.replies > 0):
                         missing_msgs.append(message)
-                        
+
             if not missing_msgs:
-                self._emit("on_status", "✅ Пропущенных постов не найдено!")
+                self._emit("on_status", t("no_missing"))
                 return
-                
-            self._emit("on_status", f"📥 Начинаем докачку {len(missing_msgs)} постов...")
-            
-            # Скачиваем в обратном порядке (от старых к новым)
+
+            self._emit("on_status", t("downloading_missing", len(missing_msgs)))
+
             total_missing = len(missing_msgs)
             for i, message in enumerate(reversed(missing_msgs), 1):
-                if self._stop.is_set(): break
-                
-                self._emit("on_status", f"Докачка {i}/{total_missing} (Пост #{message.id})")
+                if self._stop.is_set():
+                    break
+
+                self._emit("on_status", t("downloading_missing_item", i, total_missing, message.id))
                 prefix = f"missing_{message.id}"
-                
+
+                # Save text content
+                if message.text:
+                    self._collect_post_data(message, prefix, dl_dir, is_comment=False)
+
                 if self._has_downloadable_media(message):
                     await self._dispatch_download(message, prefix, dl_dir, is_comment=False)
-                    
+
                 if message.replies and message.replies.replies > 0:
                     await self._process_comments(channel, message, message.id, dl_dir)
-                    
+
             if self._dl_tasks:
-                self._emit("on_status", "⏳ Докачиваем медиа...")
+                self._emit("on_status", t("downloading_missing_media"))
                 await asyncio.gather(*self._dl_tasks, return_exceptions=True)
                 self._dl_tasks.clear()
-                
+
             if not self._stop.is_set():
-                self._emit("on_status", "✅ Докачка завершена!")
-                
+                self._emit("on_status", t("downloading_missing_done"))
+                self._save_channel_data(dl_dir)
+
         except Exception as e:
-            self._emit("on_error", f"Ошибка докачки: {e}")
+            self._emit("on_error", t("downloading_missing_error", e))
         finally:
             self.is_running = False
             self._emit("on_complete")
 
     async def _check_new_posts(self):
-        """Проверка и скачивание новых постов в Live-режиме. / Check and download new posts in Live mode."""
+        """
+        Check for and download new posts in live monitoring mode.
+
+        Only processes messages newer than the last saved message ID.
+        """
         channel = await self._resolve_channel()
-        if channel is None: return
+        if channel is None:
+            return
 
         ch_state = get_channel_state(self.config)
         dl_dir = ch_state.get("download_dir", "downloads")
         os.makedirs(dl_dir, exist_ok=True)
-        
+
         last_msg_id = ch_state.get("last_msg_id", 0)
         post_counter = ch_state.get("post_counter", 0)
 
         if last_msg_id == 0:
-            self._emit("on_status", "Внимание: Это первый запуск! Рекомендуется сделать полный дамп канала через вкладку Download.")
+            self._emit("on_status", t("first_run_warning"))
 
         new_count = 0
         last_grouped_id = None
@@ -614,9 +649,9 @@ class ScraperCore:
                     break
                 messages_to_download.append(message)
         except Exception as e:
-            self._emit("on_error", f"Ошибка проверки новых постов: {e}")
+            self._emit("on_error", t("monitor_error", e))
             return
-            
+
         if not messages_to_download:
             return
 
@@ -626,7 +661,8 @@ class ScraperCore:
         for message in messages_to_download:
             if self._stop.is_set():
                 break
-                
+
+            # Album numbering
             if message.grouped_id:
                 if message.grouped_id != last_grouped_id:
                     post_counter += 1
@@ -638,15 +674,21 @@ class ScraperCore:
                 post_counter += 1
                 last_grouped_id = None
                 album_index = 0
-                
+
             has_media = self._has_downloadable_media(message)
+
+            # Save text content for all posts
+            if message.text:
+                pfx = f"{post_counter}-{album_index}" if message.grouped_id else f"{post_counter}"
+                self._collect_post_data(message, pfx, dl_dir, is_comment=False)
+
             if has_media:
                 pfx = f"{post_counter}-{album_index}" if message.grouped_id else f"{post_counter}"
                 await self._dispatch_download(message, pfx, dl_dir)
                 new_count += 1
-            else:
-                self._emit("on_log", {"msg": f"Пропуск поста #{post_counter} (нет медиа и комментариев)"})
-                
+            elif not message.text:
+                self._emit("on_log", {"msg": t("skipping_post", post_counter)})
+
             ch_state["last_msg_id"] = message.id
             ch_state["post_counter"] = post_counter
             ch_state["processed_msgs"] = ch_state.get("processed_msgs", 0) + 1
@@ -654,45 +696,39 @@ class ScraperCore:
         if self._dl_tasks:
             await asyncio.gather(*self._dl_tasks, return_exceptions=True)
             self._dl_tasks.clear()
-            
-        from scraper_core import save_config
+
         save_config(self.config)
-        
+        self._save_channel_data(dl_dir)
+
         if new_count > 0:
-            self._emit("on_status", f"✅ Скачано {new_count} новых файлов! / Downloaded {new_count} new files!")
-
-
+            self._emit("on_status", t("new_files_downloaded", new_count))
 
     async def _run_download(self):
         """
-        Основной цикл скачивания: итерация по всем сообщениям канала
-        от первого к последнему, скачивание медиа и комментариев.
         Main download loop: iterate all channel messages from oldest
-        to newest, downloading media and comments.
+        to newest, downloading media, saving text, and processing comments.
+
+        Supports resume from the last saved position.
         """
         channel = await self._resolve_channel()
         if channel is None:
             return
 
-        # Получаем состояние канала / Get channel state
         ch_state = get_channel_state(self.config)
         dl_dir = ch_state.get("download_dir", "downloads")
         os.makedirs(dl_dir, exist_ok=True)
 
-        # Общее количество сообщений для прогресс-бара / Total messages for progress bar
+        # Get total message count for progress bar
         total_info = await self.client.get_messages(channel, limit=0)
         self.stats.total_channel_msgs = total_info.total
         title = getattr(channel, "title", str(channel.id))
-        self._emit(
-            "on_status",
-            f"Канал: {title} — {total_info.total} сообщений / messages"
-        )
+        self._emit("on_status", t("channel_info", title, total_info.total))
 
-        # Настраиваем семафор для 3 параллельных скачиваний
+        # Semaphore for 3 parallel downloads
         self._dl_semaphore = asyncio.Semaphore(3)
         self._dl_tasks = []
 
-        # Восстановление прогресса / Resume progress
+        # Resume progress
         post_counter = ch_state.get("post_counter", 0)
         last_msg_id = ch_state.get("last_msg_id", 0)
         previously_processed = ch_state.get("processed_msgs", 0)
@@ -701,33 +737,28 @@ class ScraperCore:
         processed_this_run = 0
 
         if last_msg_id > 0:
-            self._emit(
-                "on_status",
-                f"▶ Продолжение с поста #{post_counter}, сообщение #{last_msg_id}"
-                f" / Resuming from post #{post_counter}, msg #{last_msg_id}"
-            )
+            self._emit("on_status", t("resuming", post_counter, last_msg_id))
 
-        # Итерация от старого к новому / Iterate oldest to newest
+        # Iterate oldest to newest
         iter_kw = {"reverse": True}
         if last_msg_id > 0:
             iter_kw["min_id"] = last_msg_id
 
         async for message in self.client.iter_messages(channel, **iter_kw):
             if self._stop.is_set():
-                self._emit("on_status", "⏹ Остановлено пользователем / Stopped by user")
+                self._emit("on_status", t("stopped_by_user"))
                 break
 
             processed_this_run += 1
             total_done = previously_processed + processed_this_run
             self.stats.processed_msgs = total_done
 
-            # Пропускаем сервисные сообщения / Skip service messages
+            # Skip service messages (join, leave, pin, etc.)
             if message.action:
                 self._update_progress(total_done)
                 continue
 
-            # ── Нумерация (с поддержкой альбомов) ──
-            # ── Numbering (with album support) ──
+            # Post numbering with album support
             if message.grouped_id:
                 if message.grouped_id != last_grouped_id:
                     post_counter += 1
@@ -746,10 +777,21 @@ class ScraperCore:
             self.stats.current_post_num = post_counter
             self._emit(
                 "on_status",
-                f"📥 Пост #{post_counter} (сообщение {total_done}/{self.stats.total_channel_msgs})"
+                t("processing_post", post_counter, total_done, self.stats.total_channel_msgs)
             )
 
-            # ── Скачивание медиа поста / Download post media ──
+            # Collect text content for all posts
+            if message.text:
+                prefix = (
+                    f"{post_counter}-{album_index}"
+                    if message.grouped_id
+                    else f"{post_counter}"
+                )
+                self._collect_post_data(message, prefix, dl_dir, is_comment=False)
+                if not self._has_downloadable_media(message):
+                    self.stats.text_posts += 1
+
+            # Download media if present
             has_media = self._has_downloadable_media(message)
             if has_media:
                 prefix = (
@@ -759,15 +801,15 @@ class ScraperCore:
                 )
                 await self._dispatch_download(message, prefix, dl_dir, is_comment=False)
 
-            # ── Скачивание комментариев / Download comments ──
+            # Process comments (only for first message in album group)
             has_comments = is_first_in_group and message.replies and message.replies.replies > 0
             if has_comments:
                 await self._process_comments(channel, message, post_counter, dl_dir)
 
-            if not has_media and not has_comments:
-                self._emit("on_log", {"msg": f"Пропуск поста #{post_counter} (нет медиа и комментариев)"})
+            if not has_media and not has_comments and not message.text:
+                self._emit("on_log", {"msg": t("skipping_post", post_counter)})
 
-            # ── Сохранение состояния / Save state ──
+            # Save state after each message
             ch_state["last_msg_id"] = message.id
             ch_state["post_counter"] = post_counter
             ch_state["processed_msgs"] = total_done
@@ -776,37 +818,112 @@ class ScraperCore:
             self._update_progress(total_done)
             await asyncio.sleep(self.config.get("delay_between_posts", 1.0))
 
-        # Дожидаемся всех активных фоновых загрузок
+        # Wait for all pending background downloads
         if self._dl_tasks:
-            self._emit("on_status", "⏳ Докачиваем медиа... / Waiting for downloads to finish...")
+            self._emit("on_status", t("waiting_downloads"))
             await asyncio.gather(*self._dl_tasks, return_exceptions=True)
             self._dl_tasks.clear()
 
-        self._emit("on_status", "✅ Скачивание завершено! / Download complete!")
-        self._emit("on_log", {"level": "INFO", "msg": "Автоматический переход в Live-мониторинг..."})
+        # Save structured data for HTML export
+        self._save_channel_data(dl_dir)
+
+        self._emit("on_status", t("download_complete"))
+        self._emit("on_log", {"level": "INFO", "msg": t("auto_monitor")})
         self._emit("on_complete", None)
-        
-        # Автоматический запуск мониторинга
+
+        # Auto-start monitoring after download completes
         await self.start_monitor()
 
+    # ── Data Collection ─────────────────────────────────────────
+
+    def _collect_post_data(self, message, prefix: str, dl_dir: str, *, is_comment: bool):
+        """
+        Collect structured post/comment data for the HTML viewer.
+
+        Stores message text, metadata, and media file references
+        in self.posts_data for later JSON export.
+        """
+        post_entry = {
+            "msg_id": message.id,
+            "prefix": prefix,
+            "date": message.date.isoformat() if message.date else "",
+            "text": message.text or "",
+            "is_comment": is_comment,
+            "views": getattr(message, "views", 0) or 0,
+            "forwards": getattr(message, "forwards", 0) or 0,
+            "media_type": classify_media(message),
+            "media_files": [],
+        }
+
+        # Check if we already have this post (update rather than duplicate)
+        for existing in self.posts_data:
+            if existing["msg_id"] == message.id:
+                existing.update(post_entry)
+                return
+
+        self.posts_data.append(post_entry)
+
+    def _save_channel_data(self, dl_dir: str):
+        """
+        Save collected post data to channel_data.json in the download directory.
+
+        This JSON file is consumed by the HTML generator to create
+        the offline viewer.
+        """
+        data_path = os.path.join(dl_dir, "channel_data.json")
+        try:
+            # Merge with existing data if present
+            existing_data = []
+            if os.path.exists(data_path):
+                with open(data_path, "r", encoding="utf-8") as f:
+                    existing_data = json.load(f)
+
+            # Merge: update existing entries, add new ones
+            existing_ids = {p["msg_id"] for p in existing_data}
+            for post in self.posts_data:
+                if post["msg_id"] in existing_ids:
+                    for i, ep in enumerate(existing_data):
+                        if ep["msg_id"] == post["msg_id"]:
+                            existing_data[i] = post
+                            break
+                else:
+                    existing_data.append(post)
+
+            # Sort by msg_id
+            existing_data.sort(key=lambda p: p["msg_id"])
+
+            with open(data_path, "w", encoding="utf-8") as f:
+                json.dump(existing_data, f, ensure_ascii=False, indent=2)
+        except Exception:
+            pass
+
+    # ── Download Dispatch ───────────────────────────────────────
+
     async def _dispatch_download(self, message, prefix, dl_dir, is_comment=False):
-        """Обертка для постановки в очередь с семафором."""
+        """
+        Queue a download task with semaphore-based concurrency limiting.
+
+        Creates an async task that acquires the semaphore before downloading,
+        ensuring no more than 3 simultaneous downloads.
+        """
         await self._dl_semaphore.acquire()
-        
+
         async def _task():
             try:
                 await self._download_file(message, prefix, dl_dir, is_comment=is_comment)
             finally:
                 self._dl_semaphore.release()
-                
-        # Удаляем завершенные задачи из списка, чтобы не было утечек памяти
-        self._dl_tasks = [t for t in self._dl_tasks if not t.done()]
+
+        # Clean up completed tasks to prevent memory leaks
+        self._dl_tasks = [t_task for t_task in self._dl_tasks if not t_task.done()]
         self._dl_tasks.append(asyncio.create_task(_task()))
 
     async def _process_comments(self, channel, message, post_counter: int, dl_dir: str):
         """
-        Скачать медиа из комментариев к посту.
-        Download media from post comments.
+        Download media and collect text from comments on a post.
+
+        Iterates all replies to a message, downloading media files
+        and collecting text content for the HTML viewer.
         """
         self.stats.current_post_comments_total = message.replies.replies
         self.stats.current_post_comments_done = 0
@@ -821,6 +938,10 @@ class ScraperCore:
 
                 self.stats.current_post_comments_done += 1
 
+                # Collect comment text
+                if comment.text:
+                    self._collect_post_data(comment, f"{post_counter}_c{comment.id}", dl_dir, is_comment=True)
+
                 if self._has_downloadable_media(comment):
                     comment_file_idx += 1
                     prefix = f"{post_counter}_{comment_file_idx}"
@@ -833,53 +954,37 @@ class ScraperCore:
         except errors.FloodWaitError as e:
             await self._handle_flood(e)
         except Exception as e:
-            self._emit(
-                "on_error",
-                f"Ошибка комментариев поста #{post_counter} / Comment error: {e}"
-            )
-            
-        # Отмечаем пост как проработанный (даже если у него нет медиа, комментарии мы проверили)
+            self._emit("on_error", t("comment_error", post_counter, e))
+
+        # Mark post as processed even if it has no media (comments were checked)
         if hasattr(message, "id") and self.config.get("channel_id"):
             self._mark_as_downloaded(self.config["channel_id"], str(message.id))
 
-    # ── Скачивание с повторами и проверкой / Download with retry & integrity ──
+    # ── File Download with Retry and Integrity Check ────────────
 
     async def _download_file(
         self, message, prefix: str, dl_dir: str, *, is_comment: bool
     ):
         """
-        Скачать один медиафайл с полной обработкой ошибок:
-        - Повтор при ошибках сети (до max_retries раз)
-        - Ожидание восстановления сети
-        - Проверка целостности скачанного файла
-        - Автоматическая перекачка повреждённых файлов
+        Download a single media file with full error handling.
 
-        Download a single media file with full error handling:
-        - Retry on network errors (up to max_retries times)
-        - Wait for network recovery
-        - Verify downloaded file integrity
+        Features:
+        - Retry on network errors up to max_retries times
+        - Wait for network recovery before retrying
+        - Verify downloaded file integrity (size check)
         - Auto-redownload corrupted files
-
-        КАЧЕСТВО / QUALITY:
-        Telethon скачивает фото и видео в максимальном доступном качестве.
-        Для фото — наибольший доступный размер (PhotoSize).
-        Для видео — оригинальный файл без сжатия.
-
-        Telethon downloads photos and videos at maximum available quality.
-        Photos: largest available PhotoSize.
-        Videos: original file without compression.
+        - Max quality: Telethon downloads largest PhotoSize and original video
         """
         file_path = os.path.join(dl_dir, prefix)
         max_retries = self.config.get("max_retries", 30)
-        
-        mtype = classify_media(message) or "файл"
-        target_name_gen = "комментария" if is_comment else "поста"
-        target_name_nom = "комментарий" if is_comment else "пост"
-        
-        # Подробный лог старта скачивания
-        self._emit("on_log", {"msg": f"⬇️ Начато скачивание {target_name_gen} #{prefix} ({mtype})..."})
-        
+
+        mtype = classify_media(message) or "unknown"
+        source_key = "source_comment" if is_comment else "source_post"
+
+        self._emit("on_log", {"msg": t("download_started", t(source_key), prefix, t(_TYPE_LABEL_KEYS.get(mtype, "media_unknown")))})
+
         def progress_cb(received, total):
+            """Report download progress and check for stop signal."""
             if self._stop.is_set():
                 raise asyncio.CancelledError()
             if total > 0 and self.on_progress:
@@ -888,41 +993,39 @@ class ScraperCore:
 
         for attempt in range(1, max_retries + 1):
             try:
-                # Проверяем соединение / Check connection
+                # Verify connection before attempting download
                 if not self.client.is_connected():
                     await self._wait_for_network()
 
-                # Скачиваем медиа (максимальное качество по умолчанию)
-                # Download media (max quality by default)
+                # Download media at maximum quality
                 downloaded = await self.client.download_media(
                     message, file=file_path, progress_callback=progress_cb
                 )
 
                 if not downloaded:
                     raise Exception("download_media returned False")
-                    
+
                 self._emit("on_progress_end", prefix)
 
-                # ── Проверка целостности / Integrity check ──
+                # Verify file integrity
                 if not self._verify_file(downloaded, message):
                     self.stats.integrity_failures += 1
-                    # Удаляем повреждённый файл / Remove corrupt file
                     try:
                         os.remove(downloaded)
                     except OSError:
                         pass
-                    raise RuntimeError(
-                        f"Целостность файла нарушена / File integrity failed: {downloaded}"
-                    )
+                    raise RuntimeError(t("integrity_failed", downloaded))
 
-                # ── Успешно скачано / Successfully downloaded ──
+                # Successfully downloaded
                 fsize = os.path.getsize(downloaded)
                 mtype = classify_media(message) or "unknown"
-                
-                # Подробный лог успешного скачивания
-                self._emit("on_log", {"msg": f"✅ Успешно скачан {target_name_nom} #{prefix} ({mtype}, {format_size(fsize)})"})
 
-                # Обновляем статистику / Update statistics
+                self._emit("on_log", {
+                    "msg": t("download_success", t(source_key), prefix,
+                             t(_TYPE_LABEL_KEYS.get(mtype, "media_unknown")), format_size(fsize))
+                })
+
+                # Update statistics
                 self.stats.total_files += 1
                 self.stats.total_size_bytes += fsize
                 if is_comment:
@@ -934,15 +1037,21 @@ class ScraperCore:
                     attr = _TYPE_TO_STAT[mtype]
                     setattr(self.stats, attr, getattr(self.stats, attr) + 1)
 
-                # Лог-запись со ссылкой / Log entry with link
+                # Update post data with downloaded file info
+                for post in self.posts_data:
+                    if post["msg_id"] == message.id:
+                        post["media_files"].append(os.path.basename(downloaded))
+                        break
+
+                # Log entry with link
                 channel_id = self.config["channel_id"]
                 link = f"https://t.me/c/{channel_id}/{message.id}"
 
                 entry = {
                     "num": prefix,
-                    "type": "Комментарий" if is_comment else "Пост",
+                    "type": t("type_comment") if is_comment else t("type_post"),
                     "file": os.path.basename(downloaded),
-                    "media_type": _TYPE_LABELS.get(mtype, mtype),
+                    "media_type": t(_TYPE_LABEL_KEYS.get(mtype, "media_unknown")),
                     "link": link,
                     "time": datetime.now().strftime("%H:%M:%S"),
                     "size": format_size(fsize),
@@ -950,66 +1059,48 @@ class ScraperCore:
                 }
                 self._emit("on_log", entry)
                 self._emit("on_stats", self.stats)
-                
-                # Записываем в базу загрузок
+
+                # Record in download history
                 channel_id = self.config["channel_id"]
                 history_id = f"c{message.id}" if is_comment else str(message.id)
                 self._mark_as_downloaded(channel_id, history_id)
-                
-                return  # Успех / Success
+
+                return  # Success
 
             except errors.FloodWaitError as e:
-                # FloodWait — не считается как попытка / Not counted as an attempt
                 await self._handle_flood(e)
                 continue
 
             except (ConnectionError, OSError, TimeoutError, ConnectionResetError) as e:
-                # Ошибка сети — ждём и повторяем / Network error — wait and retry
                 self.stats.retries_total += 1
                 if attempt >= max_retries:
-                    self._emit(
-                        "on_error",
-                        f"❌ Не удалось скачать {prefix} после {max_retries} попыток: {e}"
-                    )
+                    self._emit("on_error", t("download_failed", prefix, max_retries, e))
                     self._emit("on_progress_end", prefix)
                     return
 
-                wait = min(2 ** min(attempt, 6), 60)  # Макс 60 сек / Max 60 sec
-                self._emit(
-                    "on_status",
-                    f"📡 Ошибка сети ({attempt}/{max_retries}): {e}. "
-                    f"Повтор через {wait}с / Retry in {wait}s..."
-                )
+                wait = min(2 ** min(attempt, 6), 60)
+                self._emit("on_status", t("network_error", attempt, max_retries, e, wait))
                 await self._wait_for_network(max_wait=wait)
 
             except Exception as e:
-                # Любая другая ошибка / Any other error
                 self.stats.retries_total += 1
                 if attempt >= max_retries:
-                    self._emit(
-                        "on_error",
-                        f"❌ Не удалось скачать {prefix} после {max_retries} попыток: {e}"
-                    )
+                    self._emit("on_error", t("download_failed", prefix, max_retries, e))
                     self._emit("on_progress_end", prefix)
                     return
 
                 wait = min(2 ** min(attempt, 5), 30)
-                self._emit(
-                    "on_status",
-                    f"⚠️ Ошибка ({attempt}/{max_retries}): {e}. "
-                    f"Повтор через {wait}с / Retry in {wait}s..."
-                )
+                self._emit("on_status", t("general_error", attempt, max_retries, e, wait))
                 await asyncio.sleep(wait)
 
     def _verify_file(self, filepath: str, message) -> bool:
         """
-        Проверка целостности скачанного файла.
-        Verify downloaded file integrity.
+        Verify the integrity of a downloaded file.
 
-        Проверки / Checks:
-        1. Файл существует / File exists
-        2. Размер > 0 / Size > 0
-        3. Для документов/видео: размер совпадает с ожидаемым / For docs/video: size matches expected
+        Checks:
+        1. File exists on disk
+        2. File size is greater than zero
+        3. For documents/videos: actual size matches expected size
         """
         if not os.path.exists(filepath):
             return False
@@ -1018,32 +1109,23 @@ class ScraperCore:
         if file_size == 0:
             return False
 
-        # Для документов (видео, аудио, файлы) — точная проверка размера
-        # For documents (video, audio, files) — exact size check
+        # Exact size check for documents (video, audio, files)
         if message.document and message.document.size:
             expected = message.document.size
             if file_size != expected:
-                self._emit(
-                    "on_status",
-                    f"⚠️ Размер не совпадает: {file_size} ≠ {expected} байт"
-                    f" / Size mismatch: {file_size} ≠ {expected} bytes"
-                )
+                self._emit("on_status", t("size_mismatch", file_size, expected))
                 return False
 
         return True
 
-    # ── Сетевая устойчивость / Network resilience ─────────────
+    # ── Network Resilience ──────────────────────────────────────
 
     async def _wait_for_network(self, max_wait: int = 300):
         """
-        Ожидание восстановления сетевого соединения.
-        Wait until network connection is restored.
+        Wait until the network connection to Telegram is restored.
 
-        Периодически пытается переподключиться к Telegram.
-        Periodically attempts to reconnect to Telegram.
-
-        Args:
-            max_wait: Максимальное время ожидания (сек) / Max wait time (sec)
+        Periodically attempts to reconnect, with the interval defined
+        in config. Times out after max_wait seconds.
         """
         interval = self.config.get("network_check_interval", 5)
         waited = 0
@@ -1056,24 +1138,21 @@ class ScraperCore:
                 if not self.client.is_connected():
                     await self.client.connect()
 
-                # Проверяем, что соединение действительно работает
-                # Verify the connection actually works
                 if await self.client.is_user_authorized():
-                    return  # Соединение восстановлено / Connection restored
-                return  # Подключены, но не авторизованы — продолжаем
+                    return
+                return  # Connected but not authorized — continue anyway
 
             except Exception:
-                self._emit(
-                    "on_status",
-                    f"📡 Ожидание сети ({waited}с)... / Waiting for network ({waited}s)..."
-                )
+                self._emit("on_status", t("waiting_network", waited))
                 await asyncio.sleep(interval)
                 waited += interval
 
     async def _reconnect(self):
         """
-        Безопасное переподключение к Telegram.
         Safely reconnect to Telegram.
+
+        First attempts a clean disconnect/reconnect cycle. If that fails,
+        recreates the entire client instance.
         """
         try:
             if self.client.is_connected():
@@ -1084,28 +1163,26 @@ class ScraperCore:
         try:
             await self.client.connect()
         except Exception:
-            # Полное пересоздание клиента / Full client recreation
             self.client = self._make_client()
             await self.client.connect()
 
-
-
-    # ── Вспомогательные методы / Helper methods ───────────────
+    # ── Helper Methods ──────────────────────────────────────────
 
     @staticmethod
     def _has_downloadable_media(message) -> bool:
-        """Есть ли скачиваемое медиа. / Check if message has downloadable media."""
+        """Check if a message contains media that can be downloaded as a file."""
         return message.media is not None and not isinstance(
             message.media, _SKIP_MEDIA
         )
 
     async def _resolve_channel(self):
         """
-        Получить сущность канала по ID.
-        Resolve channel entity by ID.
+        Resolve a channel entity by its ID from the config.
+
+        Tries the -100 prefix format first (internal Telegram channel ID),
+        then falls back to direct ID lookup.
         """
         cid = self.config.get("channel_id", 0)
-        # Telegram channel IDs have -100 prefix internally
         try:
             return await self.client.get_entity(int(f"-100{cid}"))
         except Exception:
@@ -1113,56 +1190,60 @@ class ScraperCore:
         try:
             return await self.client.get_entity(cid)
         except Exception as e:
-            self._emit("on_error", f"Канал {cid} не найден / Channel not found: {e}")
+            self._emit("on_error", t("channel_not_found", cid, e))
             return None
 
     async def _handle_flood(self, exc: errors.FloodWaitError):
         """
-        Обработка FloodWait от Telegram.
-        Handle Telegram's FloodWait error.
+        Handle Telegram's FloodWait rate-limiting error.
+
+        Waits for the required duration multiplied by the configured
+        multiplier to avoid hitting the limit again immediately.
         """
         mult = self.config.get("flood_wait_multiplier", 1.5)
         wait = int(exc.seconds * mult)
-        self._emit(
-            "on_status",
-            f"⚠️ FloodWait — пауза {wait}с... / FloodWait — pausing {wait}s..."
-        )
+        self._emit("on_status", t("flood_wait", wait))
         await asyncio.sleep(wait)
 
     def _update_progress(self, done: int):
-        """Обновить прогресс-бар и предиктор размера. / Update progress and size predictor."""
+        """
+        Update the overall progress bar and estimate remaining size.
+
+        Also checks disk space every 100 messages and warns if
+        the estimated total download size exceeds free space.
+        """
         total = self.stats.total_channel_msgs
         frac = done / total if total > 0 else 0.0
         self._emit("on_progress_overall", frac, done, total)
 
-        # Предиктор размера каждые 100 сообщений
+        # Size predictor every 100 messages
         if done > 0 and done % 100 == 0 and self.stats.total_files > 0:
             import shutil
             avg_size = self.stats.total_size_bytes / self.stats.total_files
             files_per_msg = self.stats.total_files / done
             predicted_total_files = total * files_per_msg
             predicted_size = predicted_total_files * avg_size
-            
+
             try:
                 ch_state = get_channel_state(self.config)
                 dl_dir = ch_state.get("download_dir", "downloads")
                 os.makedirs(dl_dir, exist_ok=True)
                 free_space = shutil.disk_usage(dl_dir).free
-                
-                # Если прогноз больше свободного места, логируем
+
                 if predicted_size > free_space:
-                    from util import format_size
                     self._emit("on_log", {
                         "level": "WARN",
-                        "msg": f"⚠️ Ожидаемый размер: {format_size(predicted_size)}. Свободно: {format_size(free_space)}."
+                        "msg": t("size_warning", format_size(int(predicted_size)), format_size(free_space))
                     })
             except Exception:
                 pass
 
     def _emit(self, name: str, *args):
         """
-        Вызвать коллбэк по имени (thread-safe обёртка на стороне GUI).
-        Invoke callback by name (thread-safe wrapper is on the GUI side).
+        Invoke a callback by name with the given arguments.
+
+        The GUI layer registers callbacks on this object. This method
+        provides a safe way to call them without checking for None.
         """
         cb = getattr(self, name, None)
         if cb:
