@@ -55,5 +55,9 @@ config.json
 lang.json
 channel_data.json
 
+# Agent logs and temporary artifacts
+logs-agent/
+generated-*.ico
+
 # Specific ignores for telegram-secret-channel-downloader
 # DO NOT COMMIT AUTH TOKENS OR SESSION FILES

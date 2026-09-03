@@ -234,10 +234,11 @@ class TelegramScraperFlet:
         controls = ft.Row([
             ft.ElevatedButton(t("btn_start"), on_click=self.on_start_dl, icon=ft.icons.PLAY_ARROW, bgcolor=ft.colors.GREEN_600, color=ft.colors.WHITE),
             ft.ElevatedButton(t("btn_stop"), on_click=self.on_stop_dl, icon=ft.icons.STOP, bgcolor=ft.colors.RED_600, color=ft.colors.WHITE),
-            ft.ElevatedButton(t("btn_reset"), on_click=self.on_reset, icon=ft.icons.REFRESH, color=ft.colors.ORANGE_400),
+            ft.ElevatedButton(t("btn_skip_active"), on_click=self.on_skip_active, icon=ft.icons.SKIP_NEXT, color=ft.colors.ORANGE_400),
+            ft.ElevatedButton(t("btn_reset"), on_click=self.on_reset, icon=ft.icons.REFRESH, color=ft.colors.GREY_400),
             ft.ElevatedButton(t("btn_generate_html"), on_click=self.on_generate_html, icon=ft.icons.ARTICLE, color=ft.colors.TEAL_400),
             ft.ElevatedButton(t("btn_open_html"), on_click=self.on_open_html, icon=ft.icons.OPEN_IN_BROWSER, color=ft.colors.CYAN_400),
-        ])
+        ], wrap=True)
 
         # Live log
         self.live_log_list = ft.ListView(expand=True, spacing=2, auto_scroll=True)
@@ -341,6 +342,12 @@ class TelegramScraperFlet:
         self.inp_dl_dir = ft.TextField(label=t("download_dir_label"), expand=True)
         btn_pick_dir = ft.IconButton(icon=ft.icons.FOLDER_OPEN, on_click=lambda _: self.file_picker.get_directory_path())
 
+        # Delays & limits
+        self.inp_delay_posts = ft.TextField(label=t("delay_posts_label"), expand=True)
+        self.inp_delay_text = ft.TextField(label=t("delay_text_label"), expand=True)
+        self.inp_max_file_size = ft.TextField(label=t("max_file_size_label"), expand=True)
+        self.inp_max_retries = ft.TextField(label=t("max_retries_label"), expand=True)
+
         # Language selector
         lang_dropdown = ft.Dropdown(
             label=t("language_label"),
@@ -365,6 +372,10 @@ class TelegramScraperFlet:
                 self.inp_channel_id,
                 ft.Row([self.inp_dl_dir, btn_pick_dir]),
                 ft.Divider(),
+                ft.Text(t("delays_settings"), size=18, weight=ft.FontWeight.BOLD),
+                ft.Row([self.inp_delay_posts, self.inp_delay_text]),
+                ft.Row([self.inp_max_file_size, self.inp_max_retries]),
+                ft.Divider(),
                 lang_dropdown,
                 ft.Divider(),
                 btn_save
@@ -381,6 +392,11 @@ class TelegramScraperFlet:
 
         ch_state = cfg.get("channels", {}).get(str(self.inp_channel_id.value), {})
         self.inp_dl_dir.value = ch_state.get("download_dir", "downloads")
+
+        self.inp_delay_posts.value = str(cfg.get("delay_between_posts", 0.3))
+        self.inp_delay_text.value = str(cfg.get("delay_between_text", 0.05))
+        self.inp_max_file_size.value = str(cfg.get("max_file_size_mb", 0))
+        self.inp_max_retries.value = str(cfg.get("max_retries", 5))
         self.page.update()
 
     def on_save_settings(self, e):
@@ -392,6 +408,26 @@ class TelegramScraperFlet:
 
         ch_state = cfg.setdefault("channels", {}).setdefault(str(self.inp_channel_id.value), {})
         ch_state["download_dir"] = self.inp_dl_dir.value
+
+        try:
+            cfg["delay_between_posts"] = float(self.inp_delay_posts.value)
+        except (ValueError, TypeError):
+            cfg["delay_between_posts"] = 0.3
+
+        try:
+            cfg["delay_between_text"] = float(self.inp_delay_text.value)
+        except (ValueError, TypeError):
+            cfg["delay_between_text"] = 0.05
+
+        try:
+            cfg["max_file_size_mb"] = float(self.inp_max_file_size.value)
+        except (ValueError, TypeError):
+            cfg["max_file_size_mb"] = 0
+
+        try:
+            cfg["max_retries"] = int(self.inp_max_retries.value)
+        except (ValueError, TypeError):
+            cfg["max_retries"] = 5
 
         from scraper_core import save_config
         save_config(cfg)
@@ -442,15 +478,23 @@ class TelegramScraperFlet:
         self.page.update()
 
     def cb_progress(self, prefix, frac, done, total):
-        """Update or create a per-file progress bar."""
-        if prefix not in self.active_bars:
-            pb = ft.ProgressBar(value=0, height=10, color=ft.colors.BLUE_400, bgcolor=ft.colors.SURFACE_VARIANT)
-            lbl = ft.Text(t("file_progress_fmt", prefix, "0", "0"), size=14)
-            row = ft.Column([lbl, pb], spacing=2)
-            self.active_bars[prefix] = {"pb": pb, "lbl": lbl, "row": row}
+        """Update or create a per-file progress bar with instant skip button."""
+        pfx_str = str(prefix)
+        if pfx_str not in self.active_bars:
+            pb = ft.ProgressBar(value=0, height=8, color=ft.colors.BLUE_400, bgcolor=ft.colors.SURFACE_VARIANT)
+            lbl = ft.Text(t("file_progress_fmt", prefix, "0", "0"), size=13, expand=True)
+            btn_skip = ft.IconButton(
+                icon=ft.icons.SKIP_NEXT,
+                icon_color=ft.colors.ORANGE_400,
+                tooltip=t("btn_skip_file"),
+                on_click=lambda _, p=pfx_str: self.on_skip_file(p),
+            )
+            header_row = ft.Row([lbl, btn_skip], alignment=ft.MainAxisAlignment.SPACE_BETWEEN)
+            row = ft.Column([header_row, pb], spacing=2)
+            self.active_bars[pfx_str] = {"pb": pb, "lbl": lbl, "row": row}
             self.active_downloads_column.controls.append(row)
 
-        bar_data = self.active_bars[prefix]
+        bar_data = self.active_bars[pfx_str]
         bar_data["pb"].value = frac
         bar_data["lbl"].value = t("file_progress_fmt", prefix, format_size(done), format_size(total))
         self.page.update()
@@ -463,11 +507,12 @@ class TelegramScraperFlet:
 
     def cb_progress_end(self, prefix):
         """Remove a completed per-file progress bar."""
-        if prefix in self.active_bars:
-            row = self.active_bars[prefix]["row"]
+        pfx_str = str(prefix)
+        if pfx_str in self.active_bars:
+            row = self.active_bars[pfx_str]["row"]
             if row in self.active_downloads_column.controls:
                 self.active_downloads_column.controls.remove(row)
-            del self.active_bars[prefix]
+            del self.active_bars[pfx_str]
             self.page.update()
 
     def cb_error(self, text):
@@ -660,6 +705,18 @@ class TelegramScraperFlet:
     async def on_stop_dl(self, e):
         """Stop any running download or monitoring operation."""
         await self.scraper.stop()
+
+    def on_skip_file(self, prefix: str):
+        """Skip downloading a specific active file."""
+        self.scraper.skip_download(prefix)
+        self.write_log(t("skipping_file_action", prefix), ft.colors.ORANGE_400)
+        self.page.update()
+
+    async def on_skip_active(self, e):
+        """Skip all currently active downloading files."""
+        self.scraper.skip_all_active()
+        self.write_log(t("btn_skip_active"), ft.colors.ORANGE_400)
+        self.page.update()
 
     async def on_live(self, e):
         """Start live monitoring in a background task."""

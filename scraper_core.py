@@ -50,13 +50,17 @@ DEFAULT_CONFIG = {
     "download_dir": "downloads",
 
     # --- Delays (seconds) ---
-    "delay_between_posts": 1.0,
-    "delay_between_comments": 0.5,
-    "flood_wait_multiplier": 1.5,
+    "delay_between_posts": 0.3,
+    "delay_between_text": 0.05,
+    "delay_between_comments": 0.2,
+    "flood_wait_multiplier": 1.2,
     "subscribe_interval": 60,
 
+    # --- File limits ---
+    "max_file_size_mb": 0,  # 0 = unlimited
+
     # --- Network resilience ---
-    "max_retries": 30,
+    "max_retries": 5,
     "network_check_interval": 5,
 
     # --- Per-channel state (populated automatically) ---
@@ -88,6 +92,14 @@ def load_config() -> dict:
             saved = json.load(f)
         cfg = DEFAULT_CONFIG.copy()
         cfg.update(saved)
+
+        # Migrate old high defaults if user had legacy config
+        if cfg.get("delay_between_posts") == 1.0:
+            cfg["delay_between_posts"] = 0.3
+        if cfg.get("max_retries") == 30:
+            cfg["max_retries"] = 5
+        cfg.setdefault("delay_between_text", 0.05)
+        cfg.setdefault("max_file_size_mb", 0)
 
         # Fall back to Telegram Desktop credentials if empty
         if not cfg.get("api_id") or str(cfg.get("api_id")) == "0" or not cfg.get("api_hash"):
@@ -281,6 +293,10 @@ class ScraperCore:
         self.is_running = False
         self.is_subscribing = False
 
+        # Active downloads and skip requests
+        self._skip_requested: set[str] = set()
+        self._active_dl_tasks: dict[str, asyncio.Task] = {}
+
         # Collected post data for HTML export
         self.posts_data: list[dict] = []
 
@@ -295,6 +311,49 @@ class ScraperCore:
         self.on_error = None          # (str) -> None
         self.on_qr_url = None         # (str) -> None
         self.request_input = None     # async (title, prompt) -> str | None
+
+    def _calc_delay(self, base_delay: float, jitter_ratio: float = 0.25) -> float:
+        """
+        Calculate humanized, organic delay with subtle random jitter.
+        Makes pauses less rigid/robotic and less conspicuous ('менее явными').
+        """
+        if base_delay <= 0:
+            return 0.0
+        import random
+        low = max(0.005, base_delay * (1.0 - jitter_ratio))
+        high = base_delay * (1.0 + jitter_ratio)
+        return random.uniform(low, high)
+
+    def skip_download(self, prefix: str):
+        """
+        Request immediate skipping of an active download by prefix.
+        Cancels the active transfer and cleans up partial files.
+        """
+        pfx = str(prefix)
+        self._skip_requested.add(pfx)
+        task = self._active_dl_tasks.get(pfx)
+        if task and not task.done():
+            task.cancel()
+
+    def skip_all_active(self):
+        """Skip all currently active media file downloads."""
+        for prefix in list(self._active_dl_tasks.keys()):
+            self.skip_download(prefix)
+
+    def _cleanup_partial(self, dl_dir: str, prefix: str):
+        """Clean up any temporary or incomplete files matching prefix."""
+        try:
+            if os.path.exists(dl_dir):
+                for filename in os.listdir(dl_dir):
+                    if filename == prefix or filename.startswith(f"{prefix}."):
+                        full_p = os.path.join(dl_dir, filename)
+                        if os.path.isfile(full_p):
+                            try:
+                                os.remove(full_p)
+                            except OSError:
+                                pass
+        except Exception:
+            pass
 
     def _get_history_file(self, channel_id) -> str:
         """Return the path to the download history file for a channel."""
@@ -747,6 +806,8 @@ class ScraperCore:
         last_grouped_id = None
         album_index = 0
         processed_this_run = 0
+        last_html_export_time = time.time()
+        last_html_export_count = 0
 
         if last_msg_id > 0:
             self._emit("on_status", t("resuming", post_counter, last_msg_id))
@@ -829,16 +890,32 @@ class ScraperCore:
 
             self._update_progress(total_done)
 
-            # Auto-generate HTML on the fly after EVERY post
-            if processed_this_run > 0:
+            # Debounced HTML generation (every 50 posts or 30 seconds)
+            now_ts = time.time()
+            if processed_this_run > 0 and (
+                (processed_this_run - last_html_export_count >= 50)
+                or (now_ts - last_html_export_time >= 30.0)
+            ):
                 self._save_channel_data(dl_dir)
                 try:
                     loop = asyncio.get_running_loop()
                     await loop.run_in_executor(None, generate_channel_html, dl_dir, title)
+                    last_html_export_time = now_ts
+                    last_html_export_count = processed_this_run
                 except Exception as e:
                     self._emit("on_log", {"level": "ERROR", "msg": f"HTML generation error: {e}"})
 
-            await asyncio.sleep(self.config.get("delay_between_posts", 1.0))
+            # Adaptive humanized delays:
+            # Text posts have a subtle micro-delay with jitter (e.g. ~0.05s).
+            # Media posts use delay_between_posts with jitter (e.g. ~0.3s).
+            if has_media:
+                base_delay = float(self.config.get("delay_between_posts", 0.3))
+            else:
+                base_delay = float(self.config.get("delay_between_text", 0.05))
+
+            delay = self._calc_delay(base_delay)
+            if delay > 0:
+                await asyncio.sleep(delay)
 
         # Wait for all pending background downloads
         if self._dl_tasks:
@@ -846,8 +923,13 @@ class ScraperCore:
             await asyncio.gather(*self._dl_tasks, return_exceptions=True)
             self._dl_tasks.clear()
 
-        # Save structured data for HTML export
+        # Save structured data and generate final HTML export
         self._save_channel_data(dl_dir)
+        try:
+            loop = asyncio.get_running_loop()
+            await loop.run_in_executor(None, generate_channel_html, dl_dir, title)
+        except Exception as e:
+            self._emit("on_log", {"level": "ERROR", "msg": f"HTML generation error: {e}"})
 
         self._emit("on_status", t("download_complete"))
         self._emit("on_log", {"level": "INFO", "msg": t("auto_monitor")})
@@ -934,11 +1016,14 @@ class ScraperCore:
             try:
                 await self._download_file(message, prefix, dl_dir, is_comment=is_comment)
             finally:
+                self._active_dl_tasks.pop(str(prefix), None)
                 self._dl_semaphore.release()
 
         # Clean up completed tasks to prevent memory leaks
         self._dl_tasks = [t_task for t_task in self._dl_tasks if not t_task.done()]
-        self._dl_tasks.append(asyncio.create_task(_task()))
+        t_inst = asyncio.create_task(_task())
+        self._active_dl_tasks[str(prefix)] = t_inst
+        self._dl_tasks.append(t_inst)
 
     async def _process_comments(self, channel, message, post_counter: int, dl_dir: str):
         """
@@ -969,9 +1054,8 @@ class ScraperCore:
                     prefix = f"{post_counter}_{comment_file_idx}"
                     await self._download_file(comment, prefix, dl_dir, is_comment=True)
 
-                await asyncio.sleep(
-                    self.config.get("delay_between_comments", 0.5)
-                )
+                base_c_delay = float(self.config.get("delay_between_comments", 0.2))
+                await asyncio.sleep(self._calc_delay(base_c_delay))
 
         except errors.FloodWaitError as e:
             await self._handle_flood(e)
@@ -991,30 +1075,69 @@ class ScraperCore:
         Download a single media file with full error handling.
 
         Features:
-        - Retry on network errors up to max_retries times
-        - Wait for network recovery before retrying
+        - Instant skip support (by user click or file size threshold)
+        - Pre-check max_file_size_mb before downloading
+        - Fast failure on unavailable/restricted files (avoids 15-minute freeze)
+        - Reduced network backoff delays
         - Verify downloaded file integrity (size check)
         - Auto-redownload corrupted files
         - Max quality: Telethon downloads largest PhotoSize and original video
         """
+        pfx_str = str(prefix)
         file_path = os.path.join(dl_dir, prefix)
-        max_retries = self.config.get("max_retries", 30)
+        max_retries = int(self.config.get("max_retries", 5))
 
         mtype = classify_media(message) or "unknown"
         source_key = "source_comment" if is_comment else "source_post"
 
+        # 1. Immediate check: was this prefix already requested to be skipped?
+        if pfx_str in self._skip_requested:
+            self._skip_requested.discard(pfx_str)
+            self._emit("on_progress_end", prefix)
+            self._emit("on_log", {"msg": t("download_skipped_by_user", prefix)})
+            channel_id = self.config.get("channel_id")
+            history_id = f"c{message.id}" if is_comment else str(message.id)
+            self._mark_as_downloaded(channel_id, history_id)
+            return
+
+        # 2. Check max_file_size_mb limit before starting download
+        max_size_mb = float(self.config.get("max_file_size_mb", 0) or 0)
+        file_size = 0
+        try:
+            if hasattr(message, "file") and message.file and message.file.size:
+                file_size = message.file.size
+            elif hasattr(message, "document") and message.document and message.document.size:
+                file_size = message.document.size
+        except Exception:
+            pass
+
+        if max_size_mb > 0 and file_size > (max_size_mb * 1024 * 1024):
+            self._emit("on_log", {
+                "msg": t("download_skipped_size", t(source_key), prefix, format_size(file_size), int(max_size_mb))
+            })
+            channel_id = self.config.get("channel_id")
+            history_id = f"c{message.id}" if is_comment else str(message.id)
+            self._mark_as_downloaded(channel_id, history_id)
+            return
+
         self._emit("on_log", {"msg": t("download_started", t(source_key), prefix, t(_TYPE_LABEL_KEYS.get(mtype, "media_unknown")))})
 
         def progress_cb(received, total):
-            """Report download progress and check for stop signal."""
+            """Report download progress and check for stop/skip signal."""
             if self._stop.is_set():
-                raise asyncio.CancelledError()
+                raise asyncio.CancelledError("STOPPED")
+            if pfx_str in self._skip_requested:
+                raise asyncio.CancelledError("SKIPPED")
             if total > 0 and self.on_progress:
                 frac = received / total
                 self._emit("on_progress", prefix, frac, received, total)
 
         for attempt in range(1, max_retries + 1):
             try:
+                # Check for skip signal before starting attempt
+                if pfx_str in self._skip_requested:
+                    raise asyncio.CancelledError("SKIPPED")
+
                 # Verify connection before attempting download
                 if not self.client.is_connected():
                     await self._wait_for_network()
@@ -1025,7 +1148,17 @@ class ScraperCore:
                 )
 
                 if not downloaded:
-                    raise Exception("download_media returned False")
+                    # Media unavailable, restricted, or deleted on Telegram servers.
+                    # Fast-fail after 2 attempts to avoid long freezes.
+                    if attempt >= 2:
+                        self._emit("on_progress_end", prefix)
+                        self._emit("on_log", {"level": "WARN", "msg": t("download_unavailable", prefix)})
+                        channel_id = self.config.get("channel_id")
+                        history_id = f"c{message.id}" if is_comment else str(message.id)
+                        self._mark_as_downloaded(channel_id, history_id)
+                        return
+                    await asyncio.sleep(1)
+                    continue
 
                 self._emit("on_progress_end", prefix)
 
@@ -1089,6 +1222,21 @@ class ScraperCore:
 
                 return  # Success
 
+            except asyncio.CancelledError as e:
+                # Handle user skipping this specific file
+                if pfx_str in self._skip_requested or "SKIPPED" in str(e):
+                    self._skip_requested.discard(pfx_str)
+                    self._emit("on_progress_end", prefix)
+                    self._cleanup_partial(dl_dir, prefix)
+                    self._emit("on_log", {"msg": t("download_skipped_by_user", prefix)})
+                    channel_id = self.config.get("channel_id")
+                    history_id = f"c{message.id}" if is_comment else str(message.id)
+                    self._mark_as_downloaded(channel_id, history_id)
+                    return
+                else:
+                    self._emit("on_progress_end", prefix)
+                    raise
+
             except errors.FloodWaitError as e:
                 await self._handle_flood(e)
                 continue
@@ -1100,7 +1248,7 @@ class ScraperCore:
                     self._emit("on_progress_end", prefix)
                     return
 
-                wait = min(2 ** min(attempt, 6), 60)
+                wait = min(2 ** min(attempt, 4), 15)
                 self._emit("on_status", t("network_error", attempt, max_retries, e, wait))
                 await self._wait_for_network(max_wait=wait)
 
@@ -1111,7 +1259,7 @@ class ScraperCore:
                     self._emit("on_progress_end", prefix)
                     return
 
-                wait = min(2 ** min(attempt, 5), 30)
+                wait = min(2 ** min(attempt, 3), 10)
                 self._emit("on_status", t("general_error", attempt, max_retries, e, wait))
                 await asyncio.sleep(wait)
 
