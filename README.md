@@ -1,12 +1,12 @@
 <div align="center">
-  <img src="assets/icon.png" width="128" height="128" alt="Telegram Secret Channel Downloader Icon">
+  <img src="assets/icon.png" width="140" height="140" alt="Telegram Channel & Chat Downloader Icon" style="border-radius: 28px; box-shadow: 0 8px 24px rgba(0,0,0,0.35);">
   
-  # Telegram Secret Channel Downloader
+  # Telegram Channel & Chat Downloader
 
   ![Python](https://img.shields.io/badge/Python-3.11+-blue.svg)
   ![License](https://img.shields.io/badge/License-Proprietary-red.svg)
   ![OS](https://img.shields.io/badge/OS-Windows%20%7C%20Linux-lightgrey.svg)
-  ![Version](https://img.shields.io/badge/Version-2.0-green.svg)
+  ![Version](https://img.shields.io/badge/Version-2.1-green.svg)
   
   [English](#english) | [Русский](#русский)
 </div>
@@ -16,22 +16,27 @@
 <a name="english"></a>
 ## English
 
-**Telegram Secret Channel Downloader** is a powerful desktop tool for complete backup and archival of Telegram channels — including **private and secret channels** you have access to.
+**Telegram Channel & Chat Downloader** is a comprehensive desktop application for complete backup, export, and offline archiving of Telegram channels, groups, and **personal 1-on-1 chats (direct messages)** — including secret and restricted channels you have access to.
 
-Unlike basic scrapers, this tool downloads **everything**: text posts, media files (photos, videos, documents, voice messages, video notes, stickers, GIFs), and comments — then generates a beautiful **offline HTML viewer** styled like Telegram Web for convenient browsing without an internet connection.
+Unlike basic scrapers that only grab standalone files, this tool preserves the entire conversation ecosystem: text posts, media attachments (photos, videos, documents, voice notes, video circles, stickers, GIFs), comments, reply chains, and interlocutor metadata. It then compiles everything into an authentic, standalone **offline HTML archive** styled identically to Telegram Web and Desktop.
 
 ### Key Features
 
-* **Secret & Private Channels:** Download content from any channel you have access to, including invite-only and restricted channels. Uses your authorized Telegram account via the official MTProto protocol.
-* **Full Content Backup:** Downloads not just media, but also **text posts** and **comments** — preserving the complete channel history.
-* **Offline HTML Viewer:** Generates a self-contained HTML archive styled like Telegram Web with dark theme, search, pagination, and image lightbox. All links are relative — the archive works perfectly when moved to another location.
-* **Async Architecture:** Built on `asyncio` with up to 3 parallel downloads for maximum throughput.
-* **MTProto Encryption:** Uses the same cryptographic protocol as official Telegram apps (via Telethon library).
-* **Live Monitoring:** Real-time channel monitoring with automatic download of new posts.
-* **Fault Tolerance:** Auto-reconnect on network drops, retry with exponential backoff, FloodWait handling.
-* **Resume Support:** Tracks download progress per channel — resume from where you left off after restart.
-* **Bilingual UI:** English and Russian interface with instant language switching.
-* **Modern GUI:** Built with Flet (Flutter for Python) with real-time progress bars, statistics, and system logs.
+* **Channels, Groups & Personal Chats:** Download content from public and private channels, supergroups, and personal 1-on-1 dialogues.
+* **Authentic Telegram Dialogue Styling:** Direct messages are exported with complete interlocutor separation:
+  * **Incoming messages:** Displayed on the left in dark slate bubbles (`#182533`), featuring the interlocutor's avatar and colored sender name.
+  * **Outgoing messages:** Positioned on the right in signature Telegram blue bubbles (`#2b5278`) with delivery status checkmarks (`✓✓`).
+  * **Reply chains:** Visual quote bars linking directly to the original message.
+  * **Consecutive message grouping:** Adaptive spacing and tail styling matching Telegram Desktop.
+* **Global Cross-Page Archive Search:** Instant full-text search across all downloaded messages, spanning across every page of the archive (`search_index.js`). Highlights matched keywords and provides direct one-click navigation to the exact message on any page with an animated pulse highlight.
+* **Complete Offline Portability:** Generates self-contained HTML pages with relative paths. Works out of the box directly from your file manager via `file:///` without needing a local web server or internet connection.
+* **Full Media Backup:** Downloads high-resolution photos, videos, voice messages (`.ogg`), video notes, audio files, and documents with built-in interactive lightbox preview and media players.
+* **High Performance & Resilience:**
+  * Multi-threaded asynchronous downloads (`asyncio`) with parallel worker queues.
+  * Native MTProto protocol encryption via Telethon.
+  * Smart rate-limiting with organic humanized delays, jitter, and automatic FloodWait handling.
+  * Resume capability: Automatically picks up from the last downloaded message ID.
+* **Bilingual Modern UI:** English and Russian interface with live statistics, progress tracking, and instant theme switching built on Flet (Flutter for Python).
 
 ### Quick Start
 
@@ -40,74 +45,73 @@ Unlike basic scrapers, this tool downloads **everything**: text posts, media fil
    ```bash
    pip install -r requirements.txt
    ```
-3. Run the application:
+3. Launch the application:
    ```bash
    python main_flet.py
    ```
-4. **Windows users** can also use the launcher script:
+4. **Windows users** can also simply double-click:
    ```bash
    start.bat
    ```
 
-### Usage
+### Usage Workflow
 
-1. **Authorize** — Go to the Authorization tab and log in via QR code or phone number.
-2. **Configure** — In Settings, enter the Channel ID or username and set the download directory.
-3. **Download** — Click Start on the Download tab to begin full channel backup.
-4. **View Offline** — Click "Generate HTML" to create the offline viewer, then "Open HTML" to browse.
-5. **Monitor** — Use the Live tab to watch for new posts in real-time.
+1. **Authorize** — Open the Authorization tab and log in via QR code or phone number.
+2. **Configure** — On the Settings tab, enter the Channel/User ID or username and set the destination folder.
+3. **Download** — Click Start on the Download tab to begin the backup process.
+4. **Generate & View** — Click "Generate HTML" to compile the offline archive, then click "Open HTML" to browse.
+5. **Live Monitoring** — Use the Live tab to automatically capture new posts and messages as they appear.
 
-### Output Structure
+### Archive Folder Structure
 
 ```
 downloads/
-├── channel_12345/
-│   ├── 1.jpg              # Post media files
-│   ├── 2.mp4
-│   ├── 3_1.jpg            # Comment media
-│   ├── channel_data.json  # Structured post data
-│   ├── index.html         # Offline viewer (page 1)
-│   └── page_2.html        # Offline viewer (page 2)
+└── chat_or_channel_name/
+    ├── 1.jpg                 # Downloaded media files
+    ├── 2.mp4
+    ├── peer_avatar.jpg       # Interlocutor profile photo
+    ├── channel_data.json     # Complete structured message dataset
+    ├── chat_meta.json        # Dialogue & interlocutor metadata
+    ├── search_index.js       # Fast global cross-page search index
+    ├── index.html            # Main archive viewer (Page 1)
+    ├── page_2.html           # Paginated archive view
+    └── ...
 ```
 
 ### Disclaimer
 
-> **USE AT YOUR OWN RISK.** The author(s) of this software bear **NO responsibility** for any consequences arising from the use of this tool, including but not limited to:
-> - Telegram account restrictions or bans
-> - Violation of Telegram Terms of Service
-> - Copyright infringement claims
-> - Data loss or corruption
-> - Legal consequences in your jurisdiction
->
-> This software is provided **"as is"** for **educational and research purposes only**. The application uses the official Telegram API protocol and does not bypass any security measures. However, automated access to Telegram channels may violate their Terms of Service. **You are solely responsible for ensuring your use complies with all applicable laws, regulations, and terms of service.**
->
-> By using this software, you acknowledge that you understand and accept these risks.
+> **USE AT YOUR OWN RISK.** The author(s) bear **NO responsibility** for any consequences arising from the use of this tool, including account restrictions, terms of service violations, or data handling in your jurisdiction. This software is provided **"as is"** for **educational and backup purposes only**. You are solely responsible for compliance with all applicable laws and Telegram Terms of Service.
 
 ### License
 
-This software is distributed under a Proprietary Software License. See the `LICENSE` file for details.
+This software is distributed under a Proprietary Software License. See `LICENSE` for details.
 
 ---
 
 <a name="русский"></a>
 ## Русский
 
-**Telegram Secret Channel Downloader** — мощный десктопный инструмент для полного бэкапа и архивирования Telegram-каналов, включая **приватные и секретные каналы**, к которым у вас есть доступ.
+**Telegram Channel & Chat Downloader** — мощное десктопное приложение для полного резервного копирования, экспорта и оффлайн-архивирования Telegram-каналов, групп и **личных чатов (диалогов один на один)**, включая приватные и закрытые каналы, к которым у вас есть доступ.
 
-В отличие от простых скраперов, этот инструмент скачивает **всё**: текстовые посты, медиафайлы (фото, видео, документы, голосовые сообщения, видеокружки, стикеры, GIF), а также комментарии — и генерирует красивый **оффлайн HTML-просмотрщик** в стиле Telegram Web для удобного просмотра без интернета.
+В отличие от обычных парсеров, программа сохраняет полную экосистему переписки: тексты сообщений, медиавложения (фото, видео, документы, голосовые сообщения, видеокружки, стикеры, GIF), ветки комментариев, цитаты ответов и данные собеседников. Затем всё компилируется в автономный **оффлайн HTML-архив**, визуально неотличимый от Telegram Web и Desktop.
 
 ### Ключевые возможности
 
-* **Секретные и приватные каналы:** Скачивание контента из любых каналов, к которым у вас есть доступ, включая каналы по приглашениям и с ограниченным доступом. Использует ваш авторизованный аккаунт через официальный протокол MTProto.
-* **Полный бэкап контента:** Скачивает не только медиа, но и **текстовые посты** и **комментарии** — сохраняя полную историю канала.
-* **Оффлайн HTML-просмотрщик:** Генерирует самодостаточный HTML-архив в стиле Telegram Web с тёмной темой, поиском, пагинацией и лайтбоксом для изображений. Все ссылки относительные — архив корректно работает при перемещении в другую папку.
-* **Асинхронная архитектура:** Построен на `asyncio` с параллельной загрузкой до 3 файлов одновременно.
-* **Шифрование MTProto:** Использует тот же криптографический протокол, что и официальные приложения Telegram (библиотека Telethon).
-* **Live-мониторинг:** Мониторинг канала в реальном времени с автоматической загрузкой новых постов.
-* **Отказоустойчивость:** Автопереподключение при обрывах сети, повторные попытки с экспоненциальной задержкой, обработка FloodWait.
-* **Возобновление загрузки:** Отслеживает прогресс скачивания для каждого канала — продолжает с того места, где остановились.
-* **Двуязычный интерфейс:** Английский и русский с мгновенным переключением.
-* **Современный GUI:** Построен на Flet (Flutter для Python) с прогресс-барами, статистикой и системными логами в реальном времени.
+* **Каналы, группы и личные диалоги:** Загрузка постов и переписок из публичных и закрытых каналов, супергрупп и личных чатов.
+* **Аутентичный стиль диалогов Telegram:** Личные чаты экспортируются с полноценным разделением собеседников:
+  * **Входящие сообщения:** Располагаются слева в тёмно-серых бабблах (`#182533`) с аватаркой собеседника и цветным именем автора.
+  * **Исходящие сообщения:** Располагаются справа в фирменных сине-зелёных бабблах Telegram (`#2b5278`) со значками доставки (`✓✓`).
+  * **Цитирование ответов:** Интерактивные блоки реплаев с полосой цитирования и переходом к исходному сообщению.
+  * **Группировка подряд идущих сообщений:** Адаптивные отступы и скругления углов бабблов в точности как в Telegram Desktop.
+* **Глобальный межистраничный поиск по архиву:** Мгновенный полнотекстовый поиск по всем сообщениям переписки сквозь все страницы архива (`search_index.js`). Подсвечивает ключевые слова и позволяет в один клик перейти к нужному сообщению на любой странице с плавной анимацией подсветки.
+* **Полная оффлайн-автономность:** Генерирует полностью автономные HTML-страницы с относительными путями. Архив открывается напрямую через браузер по `file:///` и корректно работает без интернета и локальных веб-серверов.
+* **Полная выгрузка медиа:** Сохраняет оригинальные фото, видео, аудиозаписи, голосовые сообщения (`.ogg`), видеокружки и файлы с удобным просмотром через встроенный лайтбокс и медиаплееры.
+* **Высокая скорость и отказоустойчивость:**
+  * Асинхронная загрузка (`asyncio`) с очередями параллельных задач.
+  * Официальный криптографический протокол MTProto через библиотеку Telethon.
+  * Защита от ограничений: органические задержки, джиттер и автообработка FloodWait.
+  * Докачка и возобновление: запоминает ID последнего сообщения и продолжает с места остановки.
+* **Двуязычный интерфейс:** Поддержка английского и русского языков с мгновенным переключением, живой статистикой и прогресс-барами на Flet (Flutter для Python).
 
 ### Быстрый старт
 
@@ -120,31 +124,38 @@ This software is distributed under a Proprietary Software License. See the `LICE
    ```bash
    python main_flet.py
    ```
-4. **Пользователи Windows** также могут использовать скрипт запуска:
+4. **Для пользователей Windows** доступен удобный запуск:
    ```bash
    start.bat
    ```
 
-### Использование
+### Инструкция по использованию
 
-1. **Авторизация** — Перейдите на вкладку Authorization и войдите через QR-код или номер телефона.
-2. **Настройка** — В настройках укажите ID канала или username и директорию для загрузки.
-3. **Скачивание** — Нажмите Start на вкладке Download для полного бэкапа канала.
-4. **Просмотр оффлайн** — Нажмите «Generate HTML» для создания просмотрщика, затем «Open HTML» для просмотра.
-5. **Мониторинг** — Используйте вкладку Live для отслеживания новых постов в реальном времени.
+1. **Авторизация** — Перейдите на вкладку Authorization и выполните вход по QR-коду или номеру телефона.
+2. **Настройка** — Во вкладке Settings укажите ID канала/пользователя или username, а также папку для сохранения.
+3. **Скачивание** — Нажмите Start во вкладке Download для запуска полной выгрузки.
+4. **Просмотр** — Нажмите «Generate HTML» для генерации оффлайн-архива, затем «Open HTML» для открытия в браузере.
+5. **Мониторинг** — Используйте вкладку Live для автоматического отслеживания и скачивания новых сообщений в реальном времени.
+
+### Структура директории архива
+
+```
+downloads/
+└── имя_чата_или_канала/
+    ├── 1.jpg                 # Медиафайлы
+    ├── 2.mp4
+    ├── peer_avatar.jpg       # Аватар собеседника
+    ├── channel_data.json     # Полный структурированный массив сообщений
+    ├── chat_meta.json        # Метаданные диалога и участников
+    ├── search_index.js       # Индекс для глобального сквозного поиска
+    ├── index.html            # Главная страница просмотрщика (Стр. 1)
+    ├── page_2.html           # Последующие страницы архива
+    └── ...
+```
 
 ### Отказ от ответственности
 
-> **ИСПОЛЬЗУЙТЕ НА СВОЙ СТРАХ И РИСК.** Автор(ы) данного программного обеспечения **НЕ НЕСУТ НИКАКОЙ ОТВЕТСТВЕННОСТИ** за любые последствия, возникшие в результате использования этого инструмента, включая, но не ограничиваясь:
-> - Ограничения или блокировка аккаунта Telegram
-> - Нарушение Условий использования Telegram
-> - Претензии о нарушении авторских прав
-> - Потеря или повреждение данных
-> - Юридические последствия в вашей юрисдикции
->
-> Данное ПО предоставляется **«как есть»** исключительно в **образовательных и исследовательских целях**. Приложение использует официальный протокол Telegram API и не обходит никакие системы защиты. Тем не менее, автоматизированный доступ к каналам Telegram может нарушать их Условия использования. **Вы несёте полную ответственность за соблюдение всех применимых законов, правил и условий использования.**
->
-> Используя данное ПО, вы подтверждаете, что понимаете и принимаете эти риски.
+> **ИСПОЛЬЗУЙТЕ НА СВОЙ СТРАХ И РИСК.** Автор(ы) данного программного обеспечения **НЕ НЕСУТ НИКАКОЙ ОТВЕТСТВЕННОСТИ** за любые возможные последствия его использования, включая блокировки аккаунтов или нарушение правил платформы. ПО предоставляется **«как есть»** исключительно в **образовательных целях и для личного резервного копирования**. Пользователь несет персональную ответственность за соблюдение законодательства и Условий использования Telegram.
 
 ### Лицензия
 

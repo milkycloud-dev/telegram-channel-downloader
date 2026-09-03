@@ -792,7 +792,43 @@ class ScraperCore:
         # Get total message count for progress bar
         total_info = await self.client.get_messages(channel, limit=0)
         self.stats.total_channel_msgs = total_info.total
-        title = getattr(channel, "title", str(channel.id))
+        # Resolve chat title for users/dialogues, channels, or groups
+        if hasattr(channel, "title") and channel.title:
+            title = channel.title
+        elif hasattr(channel, "first_name"):
+            f_name = channel.first_name or ""
+            l_name = getattr(channel, "last_name", "") or ""
+            title = f"{f_name} {l_name}".strip() or getattr(channel, "username", "") or str(channel.id)
+        elif hasattr(channel, "username") and channel.username:
+            title = channel.username
+        else:
+            title = str(channel.id)
+
+        # Download peer/channel avatar and save chat metadata
+        is_user = hasattr(channel, "first_name")
+        avatar_path = os.path.join(dl_dir, "peer_avatar.jpg" if is_user else "avatar.jpg")
+        if not os.path.exists(avatar_path):
+            try:
+                await self.client.download_profile_photo(channel, file=avatar_path)
+            except Exception:
+                pass
+
+        try:
+            me = await self.client.get_me()
+            chat_meta = {
+                "is_dialog": is_user,
+                "peer_id": channel.id,
+                "peer_name": title,
+                "peer_username": getattr(channel, "username", "") or "",
+                "my_id": me.id if me else None,
+                "my_name": (getattr(me, "first_name", "") or getattr(me, "username", "Me")) if me else "Me",
+                "my_username": getattr(me, "username", "") if me else "",
+            }
+            with open(os.path.join(dl_dir, "chat_meta.json"), "w", encoding="utf-8") as f:
+                json.dump(chat_meta, f, ensure_ascii=False, indent=2)
+        except Exception:
+            pass
+
         self._emit("on_status", t("channel_info", title, total_info.total))
 
         # Semaphore for 3 parallel downloads
@@ -944,15 +980,35 @@ class ScraperCore:
         """
         Collect structured post/comment data for the HTML viewer.
 
-        Stores message text, metadata, and media file references
-        in self.posts_data for later JSON export.
+        Stores message text, metadata, interlocutor info, and media file
+        references in self.posts_data for later JSON export.
         """
+        is_out = bool(getattr(message, "out", False))
+        sender_id = getattr(message, "sender_id", None)
+        sender_name = ""
+        sender = getattr(message, "sender", None)
+        if sender:
+            f_name = getattr(sender, "first_name", "") or ""
+            l_name = getattr(sender, "last_name", "") or ""
+            full_n = f"{f_name} {l_name}".strip()
+            sender_name = full_n or getattr(sender, "title", "") or getattr(sender, "username", "") or ""
+        if not sender_name:
+            sender_name = getattr(message, "post_author", "") or ""
+
+        reply_to_id = None
+        if getattr(message, "reply_to", None):
+            reply_to_id = getattr(message.reply_to, "reply_to_msg_id", None)
+
         post_entry = {
             "msg_id": message.id,
             "prefix": prefix,
             "date": message.date.isoformat() if message.date else "",
             "text": message.text or "",
             "is_comment": is_comment,
+            "out": is_out,
+            "sender_id": sender_id,
+            "sender_name": sender_name,
+            "reply_to_msg_id": reply_to_id,
             "views": getattr(message, "views", 0) or 0,
             "forwards": getattr(message, "forwards", 0) or 0,
             "media_type": classify_media(message),
