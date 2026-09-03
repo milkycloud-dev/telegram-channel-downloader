@@ -20,7 +20,7 @@ _current_lang = "en"
 _TRANSLATIONS = {
     "en": {
         # ── App ──
-        "app_title": "Telegram Secret Channel Downloader",
+        "app_title": "Telegram Channel & Chat Downloader",
 
         # ── Tabs ──
         "tab_auth": "🔐 Authorization",
@@ -220,7 +220,7 @@ _TRANSLATIONS = {
     },
     "ru": {
         # ── App ──
-        "app_title": "Telegram Secret Channel Downloader",
+        "app_title": "Telegram Channel & Chat Downloader",
 
         # ── Tabs ──
         "tab_auth": "🔐 Авторизация",

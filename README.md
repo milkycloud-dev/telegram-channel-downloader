@@ -6,7 +6,7 @@
   ![Python](https://img.shields.io/badge/Python-3.11+-blue.svg)
   ![License](https://img.shields.io/badge/License-Proprietary-red.svg)
   ![OS](https://img.shields.io/badge/OS-Windows%20%7C%20Linux-lightgrey.svg)
-  ![Version](https://img.shields.io/badge/Version-2.1-green.svg)
+  ![Version](https://img.shields.io/badge/Version-3.0-green.svg)
   
   [English](#english) | [Русский](#русский)
 </div>
