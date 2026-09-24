@@ -16,7 +16,7 @@
 <a name="english"></a>
 ## English
 
-**Telegram Channel & Chat Downloader** is a comprehensive desktop application for complete backup, export, and offline archiving of Telegram channels, groups, and **personal 1-on-1 chats (direct messages)** — including secret and restricted channels you have access to.
+**Telegram Channel & Chat Downloader** is a desktop application for full backup, export and offline archiving of Telegram channels, groups and **personal 1-on-1 chats (direct messages)**, including secret and restricted channels you have access to.
 
 Unlike basic scrapers that only grab standalone files, this tool preserves the entire conversation ecosystem: text posts, media attachments (photos, videos, documents, voice notes, video circles, stickers, GIFs), comments, reply chains, and interlocutor metadata. It then compiles everything into an authentic, standalone **offline HTML archive** styled identically to Telegram Web and Desktop.
 
@@ -56,11 +56,11 @@ Unlike basic scrapers that only grab standalone files, this tool preserves the e
 
 ### Usage Workflow
 
-1. **Authorize** — Open the Authorization tab and log in via QR code or phone number.
-2. **Configure** — On the Settings tab, enter the Channel/User ID or username and set the destination folder.
-3. **Download** — Click Start on the Download tab to begin the backup process.
-4. **Generate & View** — Click "Generate HTML" to compile the offline archive, then click "Open HTML" to browse.
-5. **Live Monitoring** — Use the Live tab to automatically capture new posts and messages as they appear.
+1. **Authorize.** Open the Authorization tab and log in via QR code or phone number.
+2. **Configure.** On the Settings tab, enter the Channel/User ID or username and set the destination folder.
+3. **Download.** Click Start on the Download tab to begin the backup process.
+4. **Generate & View.** Click "Generate HTML" to compile the offline archive, then click "Open HTML" to browse.
+5. **Live Monitoring.** Use the Live tab to automatically capture new posts and messages as they appear.
 
 ### Archive Folder Structure
 
@@ -91,7 +91,7 @@ This software is distributed under a Proprietary Software License. See `LICENSE`
 <a name="русский"></a>
 ## Русский
 
-**Telegram Channel & Chat Downloader** — мощное десктопное приложение для полного резервного копирования, экспорта и оффлайн-архивирования Telegram-каналов, групп и **личных чатов (диалогов один на один)**, включая приватные и закрытые каналы, к которым у вас есть доступ.
+**Telegram Channel & Chat Downloader**: десктопное приложение для полного резервного копирования, экспорта и оффлайн-архивирования Telegram-каналов, групп и **личных чатов (диалогов один на один)**, включая приватные и закрытые каналы, к которым у вас есть доступ.
 
 В отличие от обычных парсеров, программа сохраняет полную экосистему переписки: тексты сообщений, медиавложения (фото, видео, документы, голосовые сообщения, видеокружки, стикеры, GIF), ветки комментариев, цитаты ответов и данные собеседников. Затем всё компилируется в автономный **оффлайн HTML-архив**, визуально неотличимый от Telegram Web и Desktop.
 
@@ -131,11 +131,11 @@ This software is distributed under a Proprietary Software License. See `LICENSE`
 
 ### Инструкция по использованию
 
-1. **Авторизация** — Перейдите на вкладку Authorization и выполните вход по QR-коду или номеру телефона.
-2. **Настройка** — Во вкладке Settings укажите ID канала/пользователя или username, а также папку для сохранения.
-3. **Скачивание** — Нажмите Start во вкладке Download для запуска полной выгрузки.
-4. **Просмотр** — Нажмите «Generate HTML» для генерации оффлайн-архива, затем «Open HTML» для открытия в браузере.
-5. **Мониторинг** — Используйте вкладку Live для автоматического отслеживания и скачивания новых сообщений в реальном времени.
+1. **Авторизация.** Перейдите на вкладку Authorization и выполните вход по QR-коду или номеру телефона.
+2. **Настройка.** Во вкладке Settings укажите ID канала/пользователя или username, а также папку для сохранения.
+3. **Скачивание.** Нажмите Start во вкладке Download для запуска полной выгрузки.
+4. **Просмотр.** Нажмите «Generate HTML» для генерации оффлайн-архива, затем «Open HTML» для открытия в браузере.
+5. **Мониторинг.** Используйте вкладку Live для автоматического отслеживания и скачивания новых сообщений в реальном времени.
 
 ### Структура директории архива
 
